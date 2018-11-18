@@ -45,11 +45,11 @@ go-test:
 
 go-build:
 	@echo "  >  Building binary..."
-	go build -v  --toolexec="/usr/bin/time -v" -o bookmarks.api ./*.go
+	go build -o bookmarks.api ./*.go
 
 go-build-release:
 	@echo "  >  Building binary..."
-	GOOS=linux go build ---toolexec="/usr/bin/time -v" ldflags="-s -w" -o bookmarks.api ./*.go
+	GOOS=linux go build ---toolexec="/usr/bin/time" ldflags="-s -w" -o bookmarks.api ./*.go
 
 go-clean:
 	@echo "  >  Cleaning build cache"

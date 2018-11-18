@@ -15,7 +15,10 @@ const config = `{
             "name": "bookmarks",
             "url": "http://localhost:3000",
             "roles": ["User", "Admin"]
-        }
+	}
+    },
+    "database": {
+	"connectionString": "./bookmarks.db"
     }
 }`
 
@@ -27,7 +30,7 @@ func TestConfigReader(t *testing.T) {
 		t.Error("Could not read.", err)
 	}
 
-	if config.Sec.JwtSecret != "secret" || config.Sec.Claim.Name != "bookmarks" || config.Sec.LoginRedirect != "https://login.url.com" {
+	if config.Sec.JwtSecret != "secret" || config.Sec.Claim.Name != "bookmarks" || config.Sec.LoginRedirect != "https://login.url.com" || config.DB.Connection != "./bookmarks.db" {
 		t.Error("Config values not read!")
 	}
 }

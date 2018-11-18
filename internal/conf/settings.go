@@ -9,6 +9,7 @@ import (
 // Config holds the application configuration
 type Config struct {
 	Sec Security `json:"security"`
+	DB  Database `json:"database"`
 }
 
 // Security settings for the application
@@ -18,6 +19,11 @@ type Security struct {
 	CookieName    string `json:"cookieName"`
 	LoginRedirect string `json:"loginRedirect"`
 	Claim         Claim  `json:"claim"`
+}
+
+// Database defines the connection string
+type Database struct {
+	Connection string `json:"connectionString"`
 }
 
 // Claim defines the required claims

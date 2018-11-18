@@ -5,10 +5,15 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/bihe/bookmarks/internal/conf"
-	"github.com/bihe/bookmarks/internal/handler"
-	"github.com/bihe/bookmarks/internal/request"
-	"github.com/bihe/bookmarks/internal/security"
+	"github.com/bihe/bookmarks-go/internal/bookmarks"
+	"github.com/bihe/bookmarks-go/internal/conf"
+	"github.com/bihe/bookmarks-go/internal/request"
+	"github.com/bihe/bookmarks-go/internal/security"
+	"github.com/bihe/bookmarks-go/internal/store"
+
+	// get sqlite db driver
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -66,9 +71,10 @@ func main() {
 			Roles: config.Sec.Claim.Roles,
 		},
 		RedirectURL: config.Sec.LoginRedirect,
-	}))
+	}), store.OpenConn(config.DB.Connection))
 	{
-		api.GET("/bookmarks", handler.GetAllBookmarks)
+		api.GET("/bookmarks/init", bookmarks.DebugInitBookmarks)
+		api.GET("/bookmarks", bookmarks.GetAllBookmarks)
 	}
 
 	r.Run(host + ":" + port)
