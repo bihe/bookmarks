@@ -8,7 +8,6 @@ import (
 
 	"github.com/bihe/bookmarks-go/internal/conf"
 	"github.com/bihe/bookmarks-go/internal/context"
-
 	"github.com/gin-gonic/gin"
 )
 

@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/bihe/bookmarks-go/internal/conf"
-
 	"github.com/bihe/bookmarks-go/internal/context"
 	"github.com/bihe/bookmarks-go/internal/security"
 	"github.com/bihe/bookmarks-go/internal/store"

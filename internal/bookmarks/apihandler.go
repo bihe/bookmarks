@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/bihe/bookmarks-go/internal/store"
-
 	"github.com/gin-gonic/gin"
 )
 

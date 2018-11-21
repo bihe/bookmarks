@@ -10,7 +10,6 @@ import (
 	"github.com/bihe/bookmarks-go/internal/request"
 	"github.com/bihe/bookmarks-go/internal/security"
 	"github.com/bihe/bookmarks-go/internal/store"
-
 	"github.com/gin-gonic/gin"
 )
 

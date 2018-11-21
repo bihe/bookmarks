@@ -4,13 +4,10 @@ import (
 	"net/http"
 
 	"github.com/bihe/bookmarks-go/internal/conf"
-
 	"github.com/bihe/bookmarks-go/internal/context"
-
-	"github.com/rs/xid"
-
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"github.com/rs/xid"
 
 	// get sqlite db driver
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
