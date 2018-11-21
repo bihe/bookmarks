@@ -18,7 +18,7 @@ type Claim struct {
 
 // Authorize validates the given claims and verifies if
 // they match the required claim
-// a claim entriy is in the form "name|url|role"
+// a claim entry is in the form "name|url|role"
 func Authorize(required Claim, claims []string) (roles []string, err error) {
 	for _, claim := range claims {
 		c := split(claim)

@@ -11,9 +11,6 @@ import (
 	"github.com/bihe/bookmarks-go/internal/security"
 	"github.com/bihe/bookmarks-go/internal/store"
 
-	// get sqlite db driver
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -61,7 +58,7 @@ func main() {
 	// group all api calls under a versioned-prefix
 	api := r.Group("/api/v1")
 
-	api.Use(security.JwtAuth(security.AuthOptions{
+	jwtOptions := security.AuthOptions{
 		CookieName: config.Sec.CookieName,
 		JwtIssuer:  config.Sec.JwtIssuer,
 		JwtSecret:  config.Sec.JwtSecret,
@@ -71,10 +68,15 @@ func main() {
 			Roles: config.Sec.Claim.Roles,
 		},
 		RedirectURL: config.Sec.LoginRedirect,
-	}), store.OpenConn(config.DB.Connection))
+	}
+
+	api.Use(security.JwtAuth(jwtOptions), store.InUnitOfWork(config.DB.Connection), bookmarks.CheckContext())
 	{
-		api.GET("/bookmarks/init", bookmarks.DebugInitBookmarks)
-		api.GET("/bookmarks", bookmarks.GetAllBookmarks)
+		app := &bookmarks.Controller{}
+		api.OPTIONS("/bookmarks", func(c *gin.Context) {})
+
+		api.GET("/bookmarks/__init", app.DebugInitBookmarks)
+		api.GET("/bookmarks", app.GetAllBookmarks)
 	}
 
 	r.Run(host + ":" + port)

@@ -3,8 +3,17 @@ package store
 import (
 	"net/http"
 
+	"github.com/bihe/bookmarks-go/internal/conf"
+
+	"github.com/bihe/bookmarks-go/internal/context"
+
+	"github.com/rs/xid"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+
+	// get sqlite db driver
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
 
 // ItemType is used to determine the Item
@@ -17,52 +26,50 @@ const (
 	BookmarkFolder ItemType = iota
 )
 
-// BookmarkItem represents an item either, Node or Folder
+// BookmarkItem represents an item - Node or Folder
+// a parent-child structure is modeled
 type BookmarkItem struct {
-	gorm.Model
-	DisplayName string
-	URL         string
-	SortOrder   uint8
+	Path        string `gorm:"primary_key;size:512"`
+	ItemID      string `gorm:"unique;not null;size:512"`
+	DisplayName string `gorm:"unique;not null;size:128"`
+	URL         string `gorm:"not null;size:256"`
+	SortOrder   uint8  `gorm:"column:sortorder"`
 	Type        ItemType
-	Parent      *BookmarkItem
 }
 
-// Database wraps the underlying database implementation
-type Database struct {
-	DB *gorm.DB
+// UnitOfWork wraps the underlying database implementation
+type UnitOfWork struct {
+	db *gorm.DB
 }
 
-// OpenConn opens a new DB connection for a request and returns the connection after completion
-func OpenConn(connStr string) gin.HandlerFunc {
+// GetAllBookmarks returns all available bookmarks
+func (u *UnitOfWork) GetAllBookmarks() ([]BookmarkItem, error) {
+	var bookmarks []BookmarkItem
+	if result := u.db.Order("path asc").Order("sortorder asc").Find(&bookmarks); result.Error != nil {
+		return nil, result.Error
+	}
+	return bookmarks, nil
+}
+
+// CreateBookmark saves a new bookmark in the store
+func (u *UnitOfWork) CreateBookmark(item *BookmarkItem) error {
+	if item.ItemID == "" {
+		item.ItemID = xid.New().String()
+	}
+	return u.db.Create(&item).Error
+}
+
+// InUnitOfWork opens a new DB connection for a request and closes the connection after completion
+func InUnitOfWork(connStr string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		db, err := gorm.Open("sqlite3", connStr)
 		if err != nil {
-			abort(c, http.StatusServiceUnavailable, "Could not connect to the database!")
+			context.Abort(c, http.StatusServiceUnavailable, "Could not connect to the database!")
 			return
 		}
 		defer db.Close()
 		db.AutoMigrate(&BookmarkItem{})
-		c.Set("DB", &Database{DB: db})
+		c.Set(conf.ContextUnitOfWork, &UnitOfWork{db: db})
 		c.Next()
-	}
-}
-
-func abort(c *gin.Context, status int, message string) {
-	switch c.NegotiateFormat(gin.MIMEHTML, gin.MIMEJSON, gin.MIMEPlain) {
-	case gin.MIMEJSON:
-		c.AbortWithStatusJSON(status, gin.H{
-			"status":  status,
-			"message": message,
-		})
-	case gin.MIMEHTML:
-		fallthrough
-	case gin.MIMEPlain:
-		c.String(status, message)
-		c.Abort()
-	default:
-		c.AbortWithStatusJSON(status, gin.H{
-			"status":  status,
-			"message": message,
-		})
 	}
 }

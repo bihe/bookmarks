@@ -1,45 +1,39 @@
 package bookmarks
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
-	"github.com/bihe/bookmarks-go/internal/security"
 	"github.com/bihe/bookmarks-go/internal/store"
 
 	"github.com/gin-gonic/gin"
 )
 
-// BookmarkType is a Noder or a Folder
-type BookmarkType int
-
-const (
-	// Folder for bookmakrs
-	Folder BookmarkType = iota
-	// Node is a bookmark item
-	Node
-)
-
-type bookmark struct {
-	ID          uint         `json:"id"`
-	DisplayName string       `json:"displayName"`
-	URL         string       `json:"url"`
-	SortOrder   uint8        `json:"sortOrder"`
-	ItemType    BookmarkType `json:"itemType"`
+// Bookmark is the view-model returned by the API
+type Bookmark struct {
+	Path        string `json:"path"`
+	DisplayName string `json:"displayName"`
+	URL         string `json:"url"`
+	NodeID      string `json:"nodeId"`
+	SortOrder   uint8  `json:"sortOrder"`
+	ItemType    string `json:"itemType"`
 }
 
 // DebugInitBookmarks create some testing bookmarks
-func DebugInitBookmarks(c *gin.Context) {
-	db := c.MustGet("DB").(*store.Database)
-
+func (app *Controller) DebugInitBookmarks(c *gin.Context) {
 	if c.ClientIP() == "127.0.0.1" {
 		for i := 0; i < 10; i++ {
-			db.DB.Create(&store.BookmarkItem{
-				DisplayName: "ABC",
+			if err := app.unitOfWork(c).CreateBookmark(&store.BookmarkItem{
+				DisplayName: fmt.Sprintf("ABC_%d", i),
+				Path:        fmt.Sprintf("/%d", i),
 				URL:         "http://ab.c.de",
 				Type:        store.BookmarkNode,
 				SortOrder:   0,
-			})
+			}); err != nil {
+				app.error(c, err.Error())
+				return
+			}
 		}
 		c.Status(http.StatusOK)
 		return
@@ -48,31 +42,43 @@ func DebugInitBookmarks(c *gin.Context) {
 }
 
 // GetAllBookmarks retrieves the complete list of bookmarks entries from the store
-func GetAllBookmarks(c *gin.Context) {
-	user := c.MustGet("User").(security.User)
-	db := c.MustGet("DB").(*store.Database)
+func (app *Controller) GetAllBookmarks(c *gin.Context) {
+	var err error
 
-	log.Printf("Got user from authenticated request: '%s'", user.Username)
+	log.Printf("Got user from authenticated request: '%s'", app.user(c).Username)
 
 	var bookmarks []store.BookmarkItem
-	if result := db.DB.Find(&bookmarks); result.Error != nil {
+	if bookmarks, err = app.unitOfWork(c).GetAllBookmarks(); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"status":  http.StatusNotFound,
-			"message": result.Error,
+			"message": err,
 		})
 		return
 	}
 
-	var items []bookmark
-	for _, item := range bookmarks {
-		items = append(items, bookmark{
-			DisplayName: item.DisplayName,
-			ID:          item.ID,
-			ItemType:    BookmarkType(item.Type),
-			SortOrder:   item.SortOrder,
-			URL:         item.URL,
-		})
-	}
-
+	items := mapBookmarks(bookmarks)
 	c.JSON(http.StatusOK, items)
+}
+
+func mapBookmarks(vs []store.BookmarkItem) []Bookmark {
+	vsm := make([]Bookmark, len(vs))
+	for i, v := range vs {
+		t := ""
+		switch v.Type {
+		case store.BookmarkFolder:
+			t = "folder"
+		default:
+			t = "node"
+		}
+
+		vsm[i] = Bookmark{
+			DisplayName: v.DisplayName,
+			Path:        v.Path,
+			NodeID:      v.ItemID,
+			ItemType:    t,
+			SortOrder:   v.SortOrder,
+			URL:         v.URL,
+		}
+	}
+	return vsm
 }

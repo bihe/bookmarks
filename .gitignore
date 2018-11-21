@@ -14,3 +14,4 @@
 .env
 application.json
 bookmarks.api
+development.http

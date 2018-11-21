@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/bihe/bookmarks-go/internal/conf"
+	"github.com/bihe/bookmarks-go/internal/context"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -52,23 +55,23 @@ func JwtAuth(options AuthOptions) gin.HandlerFunc {
 		}
 		if token == "" {
 			// neither the header nor the cookie supplied a jwt token
-			abort(c, http.StatusUnauthorized, "Invalid authentication. No JWT token present!", options)
+			context.AbortAndRedirect(c, http.StatusUnauthorized, "Invalid authentication. No JWT token present!", options.RedirectURL)
 			return
 		}
 		var payload JwtTokenPayload
 		var err error
 		if payload, err = ParseJwtToken(token, options.JwtSecret, options.JwtIssuer); err != nil {
 			log.Printf("Could not decode the JWT token payload: %s", err)
-			abort(c, http.StatusUnauthorized, fmt.Sprintf("Invalid authentication. Could not parse the JWT token! %s", err), options)
+			context.AbortAndRedirect(c, http.StatusUnauthorized, fmt.Sprintf("Invalid authentication. Could not parse the JWT token! %s", err), options.RedirectURL)
 			return
 		}
 		var roles []string
 		if roles, err = Authorize(options.RequiredClaim, payload.Claims); err != nil {
 			log.Printf("Insufficient permissions to access the resource: %s", err)
-			abort(c, http.StatusForbidden, fmt.Sprintf("Invalid authorization. %s", err), options)
+			context.AbortAndRedirect(c, http.StatusForbidden, fmt.Sprintf("Invalid authorization. %s", err), options.RedirectURL)
 			return
 		}
-		c.Set("User", User{
+		c.Set(conf.ContextUser, &User{
 			DisplayName: payload.DisplayName,
 			Email:       payload.Email,
 			Role:        roles,
@@ -77,26 +80,5 @@ func JwtAuth(options AuthOptions) gin.HandlerFunc {
 		})
 
 		c.Next()
-	}
-}
-
-func abort(c *gin.Context, status int, message string, options AuthOptions) {
-	switch c.NegotiateFormat(gin.MIMEHTML, gin.MIMEJSON, gin.MIMEPlain) {
-	case gin.MIMEJSON:
-		c.AbortWithStatusJSON(status, gin.H{
-			"status":  status,
-			"message": message,
-		})
-	case gin.MIMEHTML:
-		c.Redirect(http.StatusTemporaryRedirect, options.RedirectURL)
-		c.Abort()
-	case gin.MIMEPlain:
-		c.String(status, message)
-		c.Abort()
-	default:
-		c.AbortWithStatusJSON(status, gin.H{
-			"status":  status,
-			"message": message,
-		})
 	}
 }
