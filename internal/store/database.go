@@ -1,10 +1,7 @@
 package store
 
 import (
-	"net/http"
-
 	"github.com/bihe/bookmarks-go/internal/conf"
-	"github.com/bihe/bookmarks-go/internal/context"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/rs/xid"
@@ -49,23 +46,30 @@ func (u *UnitOfWork) GetAllBookmarks() ([]BookmarkItem, error) {
 }
 
 // CreateBookmark saves a new bookmark in the store
-func (u *UnitOfWork) CreateBookmark(item *BookmarkItem) error {
+func (u *UnitOfWork) CreateBookmark(item BookmarkItem) error {
 	if item.ItemID == "" {
 		item.ItemID = xid.New().String()
 	}
 	return u.db.Create(&item).Error
 }
 
-// InUnitOfWork opens a new DB connection for a request and closes the connection after completion
+// GetItemById queries the item by the given itemID
+func (u *UnitOfWork) GetItemById(itemId string) (*BookmarkItem, error) {
+	var item BookmarkItem
+	if err := u.db.Where("item_id = ?", itemId).First(&item).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+// InUnitOfWork wraps the database access
 func InUnitOfWork(connStr string) gin.HandlerFunc {
+	db, err := gorm.Open("sqlite3", connStr)
+	if err != nil {
+		panic("Could not connect to the database!")
+	}
+	db.AutoMigrate(&BookmarkItem{})
 	return func(c *gin.Context) {
-		db, err := gorm.Open("sqlite3", connStr)
-		if err != nil {
-			context.Abort(c, http.StatusServiceUnavailable, "Could not connect to the database!")
-			return
-		}
-		defer db.Close()
-		db.AutoMigrate(&BookmarkItem{})
 		c.Set(conf.ContextUnitOfWork, &UnitOfWork{db: db})
 		c.Next()
 	}

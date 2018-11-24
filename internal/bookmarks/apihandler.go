@@ -2,9 +2,10 @@ package bookmarks
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
+	"github.com/bihe/bookmarks-go/internal/conf"
+	"github.com/bihe/bookmarks-go/internal/security"
 	"github.com/bihe/bookmarks-go/internal/store"
 	"github.com/gin-gonic/gin"
 )
@@ -19,33 +20,43 @@ type Bookmark struct {
 	ItemType    string `json:"itemType"`
 }
 
-// DebugInitBookmarks create some testing bookmarks
-func (app *Controller) DebugInitBookmarks(c *gin.Context) {
-	if c.ClientIP() == "127.0.0.1" {
-		for i := 0; i < 10; i++ {
-			if err := app.unitOfWork(c).CreateBookmark(&store.BookmarkItem{
-				DisplayName: fmt.Sprintf("ABC_%d", i),
-				Path:        fmt.Sprintf("/%d", i),
-				URL:         "http://ab.c.de",
-				Type:        store.BookmarkNode,
-				SortOrder:   0,
-			}); err != nil {
-				app.error(c, err.Error())
-				return
-			}
-		}
-		c.Status(http.StatusOK)
-		return
-	}
-	c.Status(http.StatusForbidden)
+// BookmarkController combines the API methods of the bookmarks logic
+type BookmarkController struct{}
+
+// User returns the authenticated principle of the JWT middleware
+func (app *BookmarkController) user(c *gin.Context) *security.User {
+	return c.MustGet(conf.ContextUser).(*security.User)
 }
 
-// GetAllBookmarks retrieves the complete list of bookmarks entries from the store
-func (app *Controller) GetAllBookmarks(c *gin.Context) {
+// unitOfWork returns the store implementation
+func (app *BookmarkController) unitOfWork(c *gin.Context) *store.UnitOfWork {
+	return c.MustGet(conf.ContextUnitOfWork).(*store.UnitOfWork)
+}
+
+// return an error-message to the client
+func (app *BookmarkController) error(c *gin.Context, message string) {
+	status := http.StatusInternalServerError
+	switch c.NegotiateFormat(gin.MIMEHTML, gin.MIMEJSON, gin.MIMEPlain) {
+	case gin.MIMEJSON:
+		c.JSON(status, gin.H{
+			"status":  status,
+			"message": message,
+		})
+	case gin.MIMEHTML:
+		fallthrough
+	case gin.MIMEPlain:
+		c.String(status, message)
+	default:
+		c.JSON(status, gin.H{
+			"status":  status,
+			"message": message,
+		})
+	}
+}
+
+// GetAll retrieves the complete list of bookmarks entries from the store
+func (app *BookmarkController) GetAll(c *gin.Context) {
 	var err error
-
-	log.Printf("Got user from authenticated request: '%s'", app.user(c).Username)
-
 	var bookmarks []store.BookmarkItem
 	if bookmarks, err = app.unitOfWork(c).GetAllBookmarks(); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
@@ -54,30 +65,88 @@ func (app *Controller) GetAllBookmarks(c *gin.Context) {
 		})
 		return
 	}
-
 	items := mapBookmarks(bookmarks)
 	c.JSON(http.StatusOK, items)
+}
+
+// Create will save a new bookmark entry
+func (app *BookmarkController) Create(c *gin.Context) {
+	var bookmark Bookmark
+	if err := c.ShouldBindJSON(&bookmark); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  http.StatusBadRequest,
+			"message": err,
+		})
+		return
+	}
+	itemType := store.BookmarkNode
+	if bookmark.ItemType == "folder" {
+		itemType = store.BookmarkNode
+	}
+	err := app.unitOfWork(c).CreateBookmark(store.BookmarkItem{
+		DisplayName: bookmark.DisplayName,
+		Path:        bookmark.Path,
+		Type:        itemType,
+		URL:         bookmark.URL,
+		SortOrder:   bookmark.SortOrder,
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  http.StatusBadRequest,
+			"message": err,
+		})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{
+		"status":  http.StatusCreated,
+		"message": fmt.Sprintf("bookmark item created: %s/%s", bookmark.Path, bookmark.DisplayName),
+	})
+}
+
+// GetByID returns a single bookmark item, path param :NodeId
+func (app *BookmarkController) GetByID(c *gin.Context) {
+	nodeID := c.Param("NodeId")
+	if nodeID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  http.StatusBadRequest,
+			"message": "missing parameter NodeId",
+		})
+		return
+	}
+	var item *store.BookmarkItem
+	var err error
+	if item, err = app.unitOfWork(c).GetItemById(nodeID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  http.StatusBadRequest,
+			"message": err,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, mapBookmark(item))
+}
+
+func mapBookmark(item *store.BookmarkItem) Bookmark {
+	t := ""
+	switch item.Type {
+	case store.BookmarkFolder:
+		t = "folder"
+	default:
+		t = "node"
+	}
+	return Bookmark{
+		DisplayName: item.DisplayName,
+		Path:        item.Path,
+		NodeID:      item.ItemID,
+		ItemType:    t,
+		SortOrder:   item.SortOrder,
+		URL:         item.URL,
+	}
 }
 
 func mapBookmarks(vs []store.BookmarkItem) []Bookmark {
 	vsm := make([]Bookmark, len(vs))
 	for i, v := range vs {
-		t := ""
-		switch v.Type {
-		case store.BookmarkFolder:
-			t = "folder"
-		default:
-			t = "node"
-		}
-
-		vsm[i] = Bookmark{
-			DisplayName: v.DisplayName,
-			Path:        v.Path,
-			NodeID:      v.ItemID,
-			ItemType:    t,
-			SortOrder:   v.SortOrder,
-			URL:         v.URL,
-		}
+		vsm[i] = mapBookmark(&v)
 	}
 	return vsm
 }

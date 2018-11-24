@@ -29,7 +29,7 @@ func Abort(c *gin.Context, status int, message string) {
 
 // AbortAndRedirect stops the processing of the *gin.Context; if the request was text/html
 // use the provided redirect url
-func AbortAndRedirect(c *gin.Context, status int, message string, redirectUrl string) {
+func AbortAndRedirect(c *gin.Context, status int, message string, redirectURL string) {
 	switch c.NegotiateFormat(gin.MIMEHTML, gin.MIMEJSON, gin.MIMEPlain) {
 	case gin.MIMEJSON:
 		c.AbortWithStatusJSON(status, gin.H{
@@ -37,7 +37,7 @@ func AbortAndRedirect(c *gin.Context, status int, message string, redirectUrl st
 			"message": message,
 		})
 	case gin.MIMEHTML:
-		c.Redirect(http.StatusTemporaryRedirect, redirectUrl)
+		c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 		c.Abort()
 	case gin.MIMEPlain:
 		c.String(status, message)

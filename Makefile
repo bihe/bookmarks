@@ -37,7 +37,7 @@ go-compile-release: go-clean go-build-release
 
 go-run:
 	@echo "  >  Run..."
-	./bookmarks.api
+	./BookmarksAPI
 
 go-test:
 	@echo "  >  Go test..."
@@ -45,15 +45,16 @@ go-test:
 
 go-build:
 	@echo "  >  Building binary..."
-	go build -o bookmarks.api ./*.go
+	go build -o BookmarksAPI ./*.go
 
 go-build-release:
 	@echo "  >  Building binary..."
-	GOOS=linux go build ---toolexec="/usr/bin/time" ldflags="-s -w" -o bookmarks.api ./*.go
+	GOOS=linux go build ---toolexec="/usr/bin/time" ldflags="-s -w" -o BookmarksAPI ./*.go
 
 go-clean:
 	@echo "  >  Cleaning build cache"
 	go clean
+	rm -f ./BookmarksAPI
 
 .PHONY: help
 all: help

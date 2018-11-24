@@ -25,7 +25,7 @@ const config = `{
 // TestConfigReader reads config settings from json
 func TestConfigReader(t *testing.T) {
 	reader := strings.NewReader(config)
-	config, err := Defaults(reader)
+	config, err := Settings(reader)
 	if err != nil {
 		t.Error("Could not read.", err)
 	}

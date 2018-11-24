@@ -33,8 +33,8 @@ type Claim struct {
 	Roles []string `json:"roles"`
 }
 
-// Defaults returns application configuration values
-func Defaults(r io.Reader) (*Config, error) {
+// Settings returns application configuration values
+func Settings(r io.Reader) (*Config, error) {
 	var (
 		c    Config
 		cont []byte
