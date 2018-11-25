@@ -110,30 +110,3 @@ func user(r *http.Request) *security.User {
 	}
 	return user
 }
-
-/*
-
-
-// GetByID returns a single bookmark item, path param :NodeId
-func (app *BookmarkController) GetByID(c *gin.Context) {
-	nodeID := c.Param("NodeId")
-	if nodeID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  http.StatusBadRequest,
-			"message": "missing parameter NodeId",
-		})
-		return
-	}
-	var item *store.BookmarkItem
-	var err error
-	if item, err = app.unitOfWork(c).GetItemById(nodeID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  http.StatusBadRequest,
-			"message": err,
-		})
-		return
-	}
-	c.JSON(http.StatusOK, mapBookmark(item))
-}
-
-*/
