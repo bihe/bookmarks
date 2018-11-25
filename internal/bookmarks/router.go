@@ -69,8 +69,13 @@ func SetupRouter(appBasePath, configFileName string) *chi.Mux {
 		r.Use(j.JWTContext)
 		r.Use(u.UnitOfWorkContext)
 
-		bookmarks := &BookmarkController{}
-		r.Get("/bookmarks", bookmarks.GetAll)
+		b := &BookmarkController{}
+		r.Route("/bookmarks", func(r chi.Router) {
+			r.Get("/", b.GetAll)
+			r.Post("/", b.Create)
+			r.Get("/{NodeID}", b.GetByID)
+		})
+
 	})
 
 	return r

@@ -1,7 +1,10 @@
 package models
 
 import (
+	"errors"
 	"net/http"
+
+	"github.com/go-chi/render"
 )
 
 // Bookmark is the view-model returned by the API
@@ -12,6 +15,21 @@ type Bookmark struct {
 	NodeID      string `json:"nodeId"`
 	SortOrder   uint8  `json:"sortOrder"`
 	ItemType    string `json:"itemType"`
+}
+
+// BookmarkRequest is the request payload for Bookmark data model.
+type BookmarkRequest struct {
+	*Bookmark
+}
+
+// Bind assignes the the provided data to a BookmarkRequest
+func (b *BookmarkRequest) Bind(r *http.Request) error {
+	// a Bookmark is nil if no Bookmark fields are sent in the request. Return an
+	// error to avoid a nil pointer dereference.
+	if b.Bookmark == nil {
+		return errors.New("missing required Bookmarks fields")
+	}
+	return nil
 }
 
 // BookmarkResponse is the response payload for the Bookmark data model.
@@ -30,7 +48,7 @@ func NewBookmarkResponse(bookmark *Bookmark) *BookmarkResponse {
 }
 
 // Render the specific response
-func (rd *BookmarkResponse) Render(w http.ResponseWriter, r *http.Request) error {
+func (b *BookmarkResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	// Pre-processing before a response is marshalled and sent across the wire
 	return nil
 }
@@ -42,7 +60,7 @@ type BookmarkListResponse struct {
 }
 
 // Render the specific response
-func (rd *BookmarkListResponse) Render(w http.ResponseWriter, r *http.Request) error {
+func (b *BookmarkListResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	// Pre-processing before a response is marshalled and sent across the wire
 	return nil
 }
@@ -55,4 +73,24 @@ func NewBookmarkListResponse(bookmarks []*Bookmark) *BookmarkListResponse {
 	}
 	resp := &BookmarkListResponse{Count: len(list), List: list}
 	return resp
+}
+
+// SuccessResponse defines a generic success status
+type SuccessResponse struct {
+	HTTPStatusCode int    `json:"status"`            // http response status code
+	Message        string `json:"message,omitempty"` // application-level message
+}
+
+// SuccessResult created a success result
+func SuccessResult(code int, message string) render.Renderer {
+	return &SuccessResponse{
+		HTTPStatusCode: code,
+		Message:        message,
+	}
+}
+
+// Render is the overloaded method for the ErrResponse
+func (s *SuccessResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	render.Status(r, s.HTTPStatusCode)
+	return nil
 }

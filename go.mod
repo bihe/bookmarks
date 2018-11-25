@@ -8,4 +8,5 @@ require (
 	github.com/jinzhu/inflection v0.0.0-20180308033659-04140366298a // indirect
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
 	github.com/rs/xid v1.2.1
+	github.com/wangii/emoji v0.0.0-20150519084846-d15b69a4831e
 )

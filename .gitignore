@@ -18,3 +18,4 @@ development.http
 .vscode/settings.json
 application.Debug.json
 _db/bookmarks.Debug.db
+bookmarks-go
