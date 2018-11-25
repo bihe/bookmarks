@@ -49,7 +49,7 @@ go-build:
 
 go-build-release:
 	@echo "  >  Building binary..."
-	GOOS=linux go build ---toolexec="/usr/bin/time" ldflags="-s -w" -o BookmarksAPI ./*.go
+	GOOS=linux go build -o BookmarksAPI -race -ldflags="-s -w" ./*.go
 
 go-clean:
 	@echo "  >  Cleaning build cache"

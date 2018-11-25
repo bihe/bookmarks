@@ -1,6 +1,6 @@
 package bookmarks
 
-import (
+/*import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -33,3 +33,4 @@ func TestCreateBookmark(t *testing.T) {
 	assert.Equal(t, 201, w.Code)
 	assert.Equal(t, `{"message":"bookmark item created: /A/B/C/Test","status":201}`, w.Body.String())
 }
+*/

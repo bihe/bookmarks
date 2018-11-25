@@ -18,7 +18,8 @@ const config = `{
 	}
     },
     "database": {
-	"connectionString": "./bookmarks.db"
+	"connectionString": "./bookmarks.db",
+	"dialect": "sqlite"
     }
 }`
 
@@ -30,7 +31,7 @@ func TestConfigReader(t *testing.T) {
 		t.Error("Could not read.", err)
 	}
 
-	if config.Sec.JwtSecret != "secret" || config.Sec.Claim.Name != "bookmarks" || config.Sec.LoginRedirect != "https://login.url.com" || config.DB.Connection != "./bookmarks.db" {
+	if config.Sec.JwtSecret != "secret" || config.Sec.Claim.Name != "bookmarks" || config.Sec.LoginRedirect != "https://login.url.com" || config.DB.Connection != "./bookmarks.db" || config.DB.Dialect != "sqlite" {
 		t.Error("Config values not read!")
 	}
 }

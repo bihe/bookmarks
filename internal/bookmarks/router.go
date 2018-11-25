@@ -5,16 +5,18 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"time"
 
 	"github.com/bihe/bookmarks-go/internal/conf"
-	"github.com/bihe/bookmarks-go/internal/infrastructure"
 	"github.com/bihe/bookmarks-go/internal/security"
 	"github.com/bihe/bookmarks-go/internal/store"
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/render"
 )
 
 // SetupRouter configures the API
-func SetupRouter(appBasePath, configFileName string, traceLog bool) *gin.Engine {
+func SetupRouter(appBasePath, configFileName string) *chi.Mux {
 	dir, err := filepath.Abs(appBasePath)
 	if err != nil {
 		panic("Could not get the application basepath!")
@@ -30,12 +32,6 @@ func SetupRouter(appBasePath, configFileName string, traceLog bool) *gin.Engine 
 		panic("No config values available to start the server. Missing config.json file!")
 	}
 
-	r := gin.Default()
-	r.Use(infrastructure.Trace(traceLog))
-
-	// group all api calls under a versioned-prefix
-	api := r.Group("/api/v1")
-
 	jwtOptions := security.AuthOptions{
 		CookieName: config.Sec.CookieName,
 		JwtIssuer:  config.Sec.JwtIssuer,
@@ -48,19 +44,34 @@ func SetupRouter(appBasePath, configFileName string, traceLog bool) *gin.Engine 
 		RedirectURL: config.Sec.LoginRedirect,
 	}
 
-	api.Use(security.JwtAuth(jwtOptions), store.InUnitOfWork(config.DB.Connection), infrastructure.CheckContext())
-	{
-		bookmarks := api.Group("/bookmarks")
-		{
-			app := &BookmarkController{}
-			bookmarks.OPTIONS("", func(c *gin.Context) {})
-			bookmarks.GET("__init", app.DebugINIT)
-			bookmarks.GET("/gt/:name", app.GetByID)
-			bookmarks.GET("", app.GetAll)
-			bookmarks.POST("", app.Create)
+	r := chi.NewRouter()
 
+	// A good base middleware stack
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(render.SetContentType(render.ContentTypeJSON))
+
+	// Set a timeout value on the request context (ctx), that will signal
+	// through ctx.Done() that the request has timed out and further
+	// processing should be stopped.
+	r.Use(middleware.Timeout(60 * time.Second))
+
+	r.Route("/api/v1", func(r chi.Router) {
+		j := &security.JwtMiddleware{
+			Options: jwtOptions,
 		}
-	}
+		u := &store.UnitOfWorkMiddleware{
+			ConnStr:   config.DB.Connection,
+			DbDialect: config.DB.Dialect,
+		}
+		r.Use(j.JWTContext)
+		r.Use(u.UnitOfWorkContext)
+
+		bookmarks := &BookmarkController{}
+		r.Get("/bookmarks", bookmarks.GetAll)
+	})
 
 	return r
 }

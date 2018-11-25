@@ -1,6 +1,6 @@
 package bookmarks
 
-import (
+/*import (
 	"fmt"
 	"net/http"
 
@@ -28,3 +28,4 @@ func (app *BookmarkController) DebugINIT(c *gin.Context) {
 	}
 	c.Status(http.StatusForbidden)
 }
+*/

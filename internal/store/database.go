@@ -1,14 +1,35 @@
 package store
 
 import (
+	"context"
+	"net/http"
+
 	"github.com/bihe/bookmarks-go/internal/conf"
-	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/rs/xid"
 
 	// get sqlite db driver
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
+
+// UnitOfWorkMiddleware encapsulates the db handler creation
+type UnitOfWorkMiddleware struct {
+	DbDialect string
+	ConnStr   string
+}
+
+// UnitOfWorkContext wraps the database access
+func (u *UnitOfWorkMiddleware) UnitOfWorkContext(next http.Handler) http.Handler {
+	db, err := gorm.Open(u.DbDialect, u.ConnStr)
+	if err != nil {
+		panic("Could not connect to the database!")
+	}
+	db.AutoMigrate(&BookmarkItem{})
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), conf.ContextUnitOfWork, &UnitOfWork{db: db})
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
 
 // ItemType is used to determine the Item
 type ItemType uint8
@@ -17,7 +38,7 @@ const (
 	// BookmarkNode is a single bookmark
 	BookmarkNode ItemType = iota
 	// BookmarkFolder is a hierarchy/grouping element
-	BookmarkFolder ItemType = iota
+	BookmarkFolder
 )
 
 // BookmarkItem represents an item - Node or Folder
@@ -53,24 +74,11 @@ func (u *UnitOfWork) CreateBookmark(item BookmarkItem) error {
 	return u.db.Create(&item).Error
 }
 
-// GetItemById queries the item by the given itemID
-func (u *UnitOfWork) GetItemById(itemId string) (*BookmarkItem, error) {
+// GetItemByID queries the item by the given itemID
+func (u *UnitOfWork) GetItemByID(itemID string) (*BookmarkItem, error) {
 	var item BookmarkItem
-	if err := u.db.Where("item_id = ?", itemId).First(&item).Error; err != nil {
+	if err := u.db.Where("item_id = ?", itemID).First(&item).Error; err != nil {
 		return nil, err
 	}
 	return &item, nil
-}
-
-// InUnitOfWork wraps the database access
-func InUnitOfWork(connStr string) gin.HandlerFunc {
-	db, err := gorm.Open("sqlite3", connStr)
-	if err != nil {
-		panic("Could not connect to the database!")
-	}
-	db.AutoMigrate(&BookmarkItem{})
-	return func(c *gin.Context) {
-		c.Set(conf.ContextUnitOfWork, &UnitOfWork{db: db})
-		c.Next()
-	}
 }

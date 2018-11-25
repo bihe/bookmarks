@@ -1,14 +1,14 @@
 package security
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/bihe/bookmarks-go/internal/conf"
-	"github.com/bihe/bookmarks-go/internal/context"
-	"github.com/gin-gonic/gin"
+	"github.com/bihe/bookmarks-go/internal/httpcontext"
 )
 
 // AuthOptions defines presets for the Authentication handler
@@ -36,48 +36,52 @@ type User struct {
 	DisplayName string
 }
 
-// JwtAuth parses provided information from the request and populates user-data
+// JwtMiddleware is responsible for JWT authentication and authorization
+type JwtMiddleware struct {
+	Options AuthOptions
+}
+
+// JWTContext parses provided information from the request and populates user-data
 // in the request or denies access if required data is missing
-func JwtAuth(options AuthOptions) gin.HandlerFunc {
-	return func(c *gin.Context) {
+func (jwt *JwtMiddleware) JWTContext(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var token string
-		authHeader := c.GetHeader("Authorization")
+		var err error
+		authHeader := r.Header.Get("Authorization")
 		if authHeader != "" {
 			token = strings.Replace(authHeader, "Bearer ", "", 1)
 		}
 		if token == "" {
 			// fallback to get the token via the cookie
-			var err error
-			if token, err = c.Cookie(options.CookieName); err != nil {
-				log.Printf("Could not get the JWT token from the cookie: %s", err)
+			var cookie *http.Cookie
+			if cookie, err = r.Cookie(jwt.Options.CookieName); err != nil {
+				// neither the header nor the cookie supplied a jwt token
+				httpcontext.NegotiateError(w, r, http.StatusUnauthorized, "Invalid authentication, no JWT token present!", jwt.Options.RedirectURL)
+				return
 			}
-		}
-		if token == "" {
-			// neither the header nor the cookie supplied a jwt token
-			context.AbortAndRedirect(c, http.StatusUnauthorized, "Invalid authentication. No JWT token present!", options.RedirectURL)
-			return
+			token = cookie.Value
 		}
 		var payload JwtTokenPayload
-		var err error
-		if payload, err = ParseJwtToken(token, options.JwtSecret, options.JwtIssuer); err != nil {
+		if payload, err = ParseJwtToken(token, jwt.Options.JwtSecret, jwt.Options.JwtIssuer); err != nil {
 			log.Printf("Could not decode the JWT token payload: %s", err)
-			context.AbortAndRedirect(c, http.StatusUnauthorized, fmt.Sprintf("Invalid authentication. Could not parse the JWT token! %s", err), options.RedirectURL)
+			httpcontext.NegotiateError(w, r, http.StatusUnauthorized, fmt.Sprintf("Invalid authentication, could not parse the JWT token: %v", err), jwt.Options.RedirectURL)
 			return
 		}
 		var roles []string
-		if roles, err = Authorize(options.RequiredClaim, payload.Claims); err != nil {
+		if roles, err = Authorize(jwt.Options.RequiredClaim, payload.Claims); err != nil {
 			log.Printf("Insufficient permissions to access the resource: %s", err)
-			context.AbortAndRedirect(c, http.StatusForbidden, fmt.Sprintf("Invalid authorization. %s", err), options.RedirectURL)
+			httpcontext.NegotiateError(w, r, http.StatusForbidden, fmt.Sprintf("Invalid authorization: %v", err), jwt.Options.RedirectURL)
 			return
 		}
-		c.Set(conf.ContextUser, &User{
+		user := &User{
 			DisplayName: payload.DisplayName,
 			Email:       payload.Email,
 			Role:        roles,
 			UserID:      payload.UserID,
 			Username:    payload.UserName,
-		})
+		}
 
-		c.Next()
-	}
+		ctx := context.WithValue(r.Context(), conf.ContextUser, user)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }

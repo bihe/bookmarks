@@ -1,28 +1,71 @@
 package bookmarks
 
 import (
-	"fmt"
 	"net/http"
 
+	"github.com/bihe/bookmarks-go/internal/bookmarks/models"
 	"github.com/bihe/bookmarks-go/internal/conf"
 	"github.com/bihe/bookmarks-go/internal/security"
 	"github.com/bihe/bookmarks-go/internal/store"
-	"github.com/gin-gonic/gin"
+	"github.com/go-chi/render"
 )
-
-// Bookmark is the view-model returned by the API
-type Bookmark struct {
-	Path        string `json:"path"`
-	DisplayName string `json:"displayName"`
-	URL         string `json:"url"`
-	NodeID      string `json:"nodeId"`
-	SortOrder   uint8  `json:"sortOrder"`
-	ItemType    string `json:"itemType"`
-}
 
 // BookmarkController combines the API methods of the bookmarks logic
 type BookmarkController struct{}
 
+// GetAll retrieves the complete list of bookmarks entries from the store
+func (app *BookmarkController) GetAll(w http.ResponseWriter, r *http.Request) {
+	var err error
+	var bookmarks []store.BookmarkItem
+	if bookmarks, err = uow(r).GetAllBookmarks(); err != nil {
+		render.Render(w, r, models.ErrNotFound)
+	}
+	render.Render(w, r, models.NewBookmarkListResponse(mapBookmarks(bookmarks)))
+}
+
+func mapBookmark(item *store.BookmarkItem) *models.Bookmark {
+	t := ""
+	switch item.Type {
+	case store.BookmarkFolder:
+		t = "folder"
+	default:
+		t = "node"
+	}
+	return &models.Bookmark{
+		DisplayName: item.DisplayName,
+		Path:        item.Path,
+		NodeID:      item.ItemID,
+		ItemType:    t,
+		SortOrder:   item.SortOrder,
+		URL:         item.URL,
+	}
+}
+
+func mapBookmarks(vs []store.BookmarkItem) []*models.Bookmark {
+	vsm := make([]*models.Bookmark, len(vs))
+	for i, v := range vs {
+		vsm[i] = mapBookmark(&v)
+	}
+	return vsm
+}
+
+func uow(r *http.Request) *store.UnitOfWork {
+	uow := r.Context().Value(conf.ContextUnitOfWork).(*store.UnitOfWork)
+	if uow == nil {
+		panic("could not get UnitOfWork from context")
+	}
+	return uow
+}
+
+func user(r *http.Request) *security.User {
+	user := r.Context().Value(conf.ContextUser).(*security.User)
+	if user == nil {
+		panic("could not get User from context")
+	}
+	return user
+}
+
+/*
 // User returns the authenticated principle of the JWT middleware
 func (app *BookmarkController) user(c *gin.Context) *security.User {
 	return c.MustGet(conf.ContextUser).(*security.User)
@@ -150,3 +193,4 @@ func mapBookmarks(vs []store.BookmarkItem) []Bookmark {
 	}
 	return vsm
 }
+*/
