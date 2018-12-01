@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/bihe/bookmarks-go/internal/httpcontext/header"
+	"github.com/bihe/bookmarks-go/pkg/httpcontext/header"
 )
 
 // JSON is a simple map to produce JSON serialized data

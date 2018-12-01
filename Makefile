@@ -1,20 +1,8 @@
-include .env
-
 PROJECTNAME=$(shell basename "$(PWD)")
-
-# Go related variables.
-GOFILES=$(wildcard *.go)
-
-# Redirect error output to a file, so we can show it in development mode.
-STDERR=/tmp/.$(PROJECTNAME)-stderr.txt
-
-# PID file will keep the process id of the server
-PID=/tmp/.$(PROJECTNAME).pid
 
 # Make is verbose in Linux. Make it silent.
 MAKEFLAGS += --silent
 
-## compile: Compile the binary.
 compile:
 	@-$(MAKE) -s go-compile
 
@@ -27,9 +15,9 @@ test:
 run:
 	@-$(MAKE) -s go-compile go-run
 
-## clean: Clean build files. Runs `go clean` internally.
 clean:
 	@-$(MAKE) go-clean
+
 
 go-compile: go-clean go-build
 
@@ -41,19 +29,19 @@ go-run:
 
 go-test:
 	@echo "  >  Go test..."
-	grc go test -v ./...
+	go test -race -v ./...
 
 go-build:
 	@echo "  >  Building binary..."
-	go build
+	go build -o bookmarks-go ./main.go
 
 go-build-release:
 	@echo "  >  Building binary..."
-	GOOS=linux go build -race -ldflags="-s -w"
+	GOOS=linux go build -o bookmarks-go ./main.go -race -ldflags="-s -w"
 
 go-clean:
 	@echo "  >  Cleaning build cache"
-	go clean
+	go clean ./...
 	rm -f ./bookmarks-go
 
 .PHONY: help

@@ -1,0 +1,17 @@
+{
+    "security": {
+        "jwtIssuer": "issuer",
+        "jwtSecret": "<secret>",
+        "cookieName": "<cookie_name>",
+        "loginRedirect": "http://localhost:3000",
+        "claim": {
+            "name": "bookmarks",
+            "url": "http://localhost:3000",
+            "roles": ["User"]
+        }
+    },
+    "database": {
+        "connectionString": ":memory:",
+        "dialect": "sqlite3"
+    }
+}

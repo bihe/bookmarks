@@ -33,7 +33,7 @@
                 "build",
                 "-v",
                 "-x",
-                "${workspaceFolder}/*.go"
+                "${workspaceFolder}/..."
             ],
             "group": {
                 "kind": "build",

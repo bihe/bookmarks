@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestAuthorizatiion(t *testing.T) {
+func TestAuthorization(t *testing.T) {
 	reqClaim := Claim{Name: "test", URL: "http://a.b.c.de/f", Roles: []string{"user", "admin"}}
 	var claims []string
 

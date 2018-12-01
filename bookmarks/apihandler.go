@@ -4,22 +4,24 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/bihe/bookmarks-go/internal/bookmarks/models"
-	"github.com/bihe/bookmarks-go/internal/conf"
-	"github.com/bihe/bookmarks-go/internal/security"
-	"github.com/bihe/bookmarks-go/internal/store"
+	"github.com/bihe/bookmarks-go/bookmarks/conf"
+	"github.com/bihe/bookmarks-go/bookmarks/models"
+	"github.com/bihe/bookmarks-go/bookmarks/security"
+	"github.com/bihe/bookmarks-go/bookmarks/store"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 )
 
 // BookmarkController combines the API methods of the bookmarks logic
-type BookmarkController struct{}
+type BookmarkController struct {
+	uow *store.UnitOfWork
+}
 
 // GetAll retrieves the complete list of bookmarks entries from the store
 func (app *BookmarkController) GetAll(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var bookmarks []store.BookmarkItem
-	if bookmarks, err = uow(r).GetAllBookmarks(); err != nil {
+	if bookmarks, err = app.uow.GetAllBookmarks(); err != nil {
 		render.Render(w, r, models.ErrNotFound)
 	}
 	render.Render(w, r, models.NewBookmarkListResponse(mapBookmarks(bookmarks)))
@@ -39,7 +41,7 @@ func (app *BookmarkController) Create(w http.ResponseWriter, r *http.Request) {
 		itemType = store.BookmarkNode
 	}
 
-	err := uow(r).CreateBookmark(store.BookmarkItem{
+	err := app.uow.CreateBookmark(store.BookmarkItem{
 		DisplayName: bookmark.DisplayName,
 		Path:        bookmark.Path,
 		Type:        itemType,
@@ -62,7 +64,7 @@ func (app *BookmarkController) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 	var item *store.BookmarkItem
 	var err error
-	if item, err = uow(r).GetItemByID(nodeID); err != nil {
+	if item, err = app.uow.GetItemByID(nodeID); err != nil {
 		render.Render(w, r, models.ErrInvalidRequest(err))
 		return
 	}
@@ -93,14 +95,6 @@ func mapBookmarks(vs []store.BookmarkItem) []*models.Bookmark {
 		vsm[i] = mapBookmark(&v)
 	}
 	return vsm
-}
-
-func uow(r *http.Request) *store.UnitOfWork {
-	uow := r.Context().Value(conf.ContextUnitOfWork).(*store.UnitOfWork)
-	if uow == nil {
-		panic("could not get UnitOfWork from context")
-	}
-	return uow
 }
 
 func user(r *http.Request) *security.User {

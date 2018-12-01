@@ -2,14 +2,18 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
+	"path/filepath"
 	"syscall"
 	"time"
 
-	"github.com/bihe/bookmarks-go/internal/bookmarks"
+	"github.com/bihe/bookmarks-go/bookmarks"
+	"github.com/bihe/bookmarks-go/bookmarks/conf"
 	"github.com/wangii/emoji"
 )
 
@@ -29,13 +33,31 @@ func main() {
 	graceful(srv, logger, 5*time.Second)
 }
 
-func serverDefaults() (host, port, basePath, configFile string) {
+func configFromEnv() (host, port, basePath, configFile string) {
 
 	port = getOrDefault("APPLICATION_SERVER_PORT", "3000")
 	host = getOrDefault("APPLICATION_SEVER_HOST", "localhost")
 	basePath = getOrDefault("APPLICATION_BASE_PATH", "./")
-	basePath = getOrDefault("APPLICATION_CONFIG_FILE", "application.json")
+	configFile = getOrDefault("APPLICATION_CONFIG_FILE", "application.json")
 	return
+}
+
+func configFromFile(appBasePath, configFileName string) conf.Configuration {
+	dir, err := filepath.Abs(appBasePath)
+	if err != nil {
+		panic("Could not get the application basepath!")
+	}
+	configFile, err := os.Open(path.Join(dir, configFileName))
+	if err != nil {
+		panic(fmt.Sprintf("Specified config file '%s' missing!", configFileName))
+	}
+	defer configFile.Close()
+
+	config, err := conf.Settings(configFile)
+	if err != nil {
+		panic("No config values available to start the server. Missing config.json file!")
+	}
+	return *config
 }
 
 func getOrDefault(env, def string) string {
@@ -49,10 +71,11 @@ func getOrDefault(env, def string) string {
 func setup() (*http.Server, *log.Logger) {
 	// either get the server host:port from the environment
 	// or use sensible defaults
-	host, port, basePath, configFile := serverDefaults()
-	r := bookmarks.SetupRouter(basePath, configFile)
+	host, port, basePath, configFile := configFromEnv()
+	conf := configFromFile(basePath, configFile)
+	s := bookmarks.SetupAPI(conf)
 	addr := host + ":" + port
-	srv := &http.Server{Addr: addr, Handler: r}
+	srv := &http.Server{Addr: addr, Handler: s}
 	return srv, log.New(os.Stdout, "", 0)
 }
 

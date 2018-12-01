@@ -6,8 +6,8 @@ import (
 	"io/ioutil"
 )
 
-// Config holds the application configuration
-type Config struct {
+// Configuration holds the application configuration
+type Configuration struct {
 	Sec Security `json:"security"`
 	DB  Database `json:"database"`
 }
@@ -35,9 +35,9 @@ type Claim struct {
 }
 
 // Settings returns application configuration values
-func Settings(r io.Reader) (*Config, error) {
+func Settings(r io.Reader) (*Configuration, error) {
 	var (
-		c    Config
+		c    Configuration
 		cont []byte
 		err  error
 	)

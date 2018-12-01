@@ -1,10 +1,6 @@
 package store
 
 import (
-	"context"
-	"net/http"
-
-	"github.com/bihe/bookmarks-go/internal/conf"
 	"github.com/jinzhu/gorm"
 	"github.com/rs/xid"
 
@@ -12,23 +8,15 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
 
-// UnitOfWorkMiddleware encapsulates the db handler creation
-type UnitOfWorkMiddleware struct {
-	DbDialect string
-	ConnStr   string
-}
-
-// UnitOfWorkContext wraps the database access
-func (u *UnitOfWorkMiddleware) UnitOfWorkContext(next http.Handler) http.Handler {
-	db, err := gorm.Open(u.DbDialect, u.ConnStr)
+// NewUnitOfWork create a new instance of the database interaction logic
+// by setting up the datbase
+func NewUnitOfWork(dbdialect, connstr string) *UnitOfWork {
+	db, err := gorm.Open(dbdialect, connstr)
 	if err != nil {
 		panic("Could not connect to the database!")
 	}
 	db.AutoMigrate(&BookmarkItem{})
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), conf.ContextUnitOfWork, &UnitOfWork{db: db})
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+	return &UnitOfWork{db: db}
 }
 
 // ItemType is used to determine the Item
