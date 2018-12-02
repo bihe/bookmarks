@@ -22,7 +22,7 @@ func (app *BookmarkController) GetAll(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var bookmarks []store.BookmarkItem
 	if bookmarks, err = app.uow.GetAllBookmarks(); err != nil {
-		render.Render(w, r, models.ErrorNotFound(err))
+		render.Render(w, r, models.ErrNotFound(err))
 	}
 	render.Render(w, r, models.NewBookmarkListResponse(mapBookmarks(bookmarks)))
 }
@@ -88,7 +88,7 @@ func (app *BookmarkController) GetByID(w http.ResponseWriter, r *http.Request) {
 	var item *store.BookmarkItem
 	var err error
 	if item, err = app.uow.GetItemByID(nodeID); err != nil {
-		render.Render(w, r, models.ErrorNotFound(err))
+		render.Render(w, r, models.ErrNotFound(err))
 		return
 	}
 	render.Render(w, r, models.NewBookmarkResponse(mapBookmark(item)))

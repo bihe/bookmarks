@@ -38,7 +38,7 @@ func ErrInvalidRequest(err error) render.Renderer {
 }
 
 // ErrNotFound returns a http.StatusNotFound
-func ErrorNotFound(err error) render.Renderer {
+func ErrNotFound(err error) render.Renderer {
 	return &ErrResponse{
 		HTTPStatusCode: http.StatusNotFound,
 		Message:        fmt.Sprintf("cannot find item: %v", err),
