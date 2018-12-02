@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"io/ioutil"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/xid"
@@ -54,8 +55,8 @@ func (u *UnitOfWork) CreateBookmark(item BookmarkItem) error {
 		URL:         item.URL,
 		SortOrder:   item.SortOrder,
 	}); err != nil {
-		if err = tx.Rollback(); err != nil {
-			return fmt.Errorf("could not rollback transaction: %v", err)
+		if txErr := tx.Rollback(); txErr != nil {
+			return fmt.Errorf("could not rollback transaction: %v", txErr)
 		}
 		return fmt.Errorf("could not save bookmark: %v", err)
 	}
@@ -102,4 +103,16 @@ func (u *UnitOfWork) GetItemByID(itemID string) (*BookmarkItem, error) {
 		return nil, fmt.Errorf("could not get bookmark by ID:'%s': %v", itemID, err)
 	}
 	return &item, nil
+}
+
+// InitSchema sets the sqlite database schema
+func (u *UnitOfWork) InitSchema(ddlFilePath string) error {
+	c, err := ioutil.ReadFile(ddlFilePath)
+	if err != nil {
+		return fmt.Errorf("could not read ddl.sql file: %v", err)
+	}
+	if _, err := u.db.Exec(string(c)); err != nil {
+		return fmt.Errorf("cannot created db schema from file '%s': %v", ddlFilePath, err)
+	}
+	return nil
 }

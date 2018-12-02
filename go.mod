@@ -9,4 +9,5 @@ require (
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/rs/xid v1.2.1
 	github.com/wangii/emoji v0.0.0-20150519084846-d15b69a4831e
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )

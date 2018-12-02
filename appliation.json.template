@@ -13,5 +13,15 @@
     "database": {
         "connectionString": ":memory:",
         "dialect": "sqlite3"
+    },
+    "logging": {
+        "logPrefix": "prefix",
+        "rollingFileLogger": {
+            "filePath": "/temp/file",
+            "maxFileSize": 100,
+            "numberOfMaxBackups": 4,
+            "maxAge": 7,
+            "compressFile": false
+        }
     }
 }

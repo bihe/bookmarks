@@ -8,8 +8,9 @@ import (
 
 // Configuration holds the application configuration
 type Configuration struct {
-	Sec Security `json:"security"`
-	DB  Database `json:"database"`
+	Sec Security  `json:"security"`
+	DB  Database  `json:"database"`
+	Log LogConfig `json:"logging"`
 }
 
 // Security settings for the application
@@ -32,6 +33,21 @@ type Claim struct {
 	Name  string   `json:"name"`
 	URL   string   `json:"url"`
 	Roles []string `json:"roles"`
+}
+
+// LogConfig is used to define settings for the logging process
+type LogConfig struct {
+	Prefix  string        `json:"logPrefix"`
+	Rolling RollingLogger `json:"rollingFileLogger"`
+}
+
+// RollingLogger defines settings to use for rolling file loggers
+type RollingLogger struct {
+	FilePath   string `json:"filePath"` // in megabytes
+	MaxSize    int    `json:"maxFileSize"`
+	MaxBackups int    `json:"numberOfMaxBackups"`
+	MaxAge     int    `json:"maxAge"` // days
+	Compress   bool   `json:"compressFile"`
 }
 
 // Settings returns application configuration values

@@ -37,7 +37,7 @@ go-build:
 
 go-build-release:
 	@echo "  >  Building binary..."
-	GOOS=linux go build -o bookmarks-go ./main.go -race -ldflags="-s -w"
+	GOOS=linux go build -race -ldflags="-s -w" -tags prod -o bookmarks-go ./main.go
 
 go-clean:
 	@echo "  >  Cleaning build cache"

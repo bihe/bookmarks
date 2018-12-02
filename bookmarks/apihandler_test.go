@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -67,8 +69,21 @@ func createToken() string {
 	return tokenString
 }
 
+func getSqliteDDL() string {
+	dir, err := filepath.Abs("../")
+	if err != nil {
+		return ""
+	}
+	return path.Join(dir, "_db/", "ddl.sql")
+}
+
 func TestCreateBookmark(t *testing.T) {
-	router := bookmarks.SetupAPI(getTestConfig())
+	ddlFilePath := getSqliteDDL()
+	if ddlFilePath == "" {
+		t.Fatalf("Could not get ddl file for sqlite in memory db!")
+	}
+
+	router := bookmarks.SetupAPIInitDB(getTestConfig(), ddlFilePath)
 	jwt := createToken()
 	tt := []struct {
 		name     string
@@ -83,8 +98,7 @@ func TestCreateBookmark(t *testing.T) {
 				"path":"/A/B/C",
 				"displayName":"Test",
 				"url": "http://a.b.c.de",
-				"sortOrder": 1,
-				"itemType": "node"
+				"sortOrder": 1
 			}`,
 			jwt:      jwt,
 			status:   http.StatusCreated,

@@ -19,3 +19,4 @@ development.http
 application.Debug.json
 _db/bookmarks.Debug.db
 bookmarks-go
+_logs/

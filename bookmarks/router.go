@@ -11,8 +11,17 @@ import (
 	"github.com/go-chi/render"
 )
 
+// SetupAPIInitDB configures the API and inits the DB - execute ddl.sql
+func SetupAPIInitDB(config conf.Configuration, ddlFilePath string) *chi.Mux {
+	return setupAPI(config, ddlFilePath)
+}
+
 // SetupAPI configures the API
 func SetupAPI(config conf.Configuration) *chi.Mux {
+	return setupAPI(config, "")
+}
+
+func setupAPI(config conf.Configuration, ddlFilePath string) *chi.Mux {
 	r := chi.NewRouter()
 
 	// A good base middleware stack
@@ -42,8 +51,12 @@ func SetupAPI(config conf.Configuration) *chi.Mux {
 			},
 		}
 		r.Use(j.JWTContext)
+		uow := store.NewUnitOfWork(config.DB.Dialect, config.DB.Connection)
+		if ddlFilePath != "" {
+			uow.InitSchema(ddlFilePath)
+		}
 		b := &BookmarkController{
-			uow: store.NewUnitOfWork(config.DB.Dialect, config.DB.Connection),
+			uow: uow,
 		}
 		r.Route("/bookmarks", func(r chi.Router) {
 			r.Get("/", b.GetAll)

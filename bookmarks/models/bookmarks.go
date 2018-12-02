@@ -12,7 +12,7 @@ type Bookmark struct {
 	Path        string `json:"path"`
 	DisplayName string `json:"displayName"`
 	URL         string `json:"url"`
-	NodeID      string `json:"nodeId"`
+	NodeID      string `json:"nodeId,omitempty"`
 	SortOrder   uint8  `json:"sortOrder"`
 }
 
