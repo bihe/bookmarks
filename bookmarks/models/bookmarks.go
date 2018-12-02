@@ -14,7 +14,6 @@ type Bookmark struct {
 	URL         string `json:"url"`
 	NodeID      string `json:"nodeId"`
 	SortOrder   uint8  `json:"sortOrder"`
-	ItemType    string `json:"itemType"`
 }
 
 // BookmarkRequest is the request payload for Bookmark data model.

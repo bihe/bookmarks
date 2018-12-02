@@ -48,6 +48,7 @@ func SetupAPI(config conf.Configuration) *chi.Mux {
 		r.Route("/bookmarks", func(r chi.Router) {
 			r.Get("/", b.GetAll)
 			r.Post("/", b.Create)
+			r.Put("/", b.Update)
 			r.Get("/{NodeID}", b.GetByID)
 		})
 	})

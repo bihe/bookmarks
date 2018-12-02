@@ -74,6 +74,7 @@ func TestCreateBookmark(t *testing.T) {
 		name     string
 		payload  string
 		status   int
+		jwt      string
 		response string
 	}{
 		{
@@ -85,14 +86,23 @@ func TestCreateBookmark(t *testing.T) {
 				"sortOrder": 1,
 				"itemType": "node"
 			}`,
+			jwt:      jwt,
 			status:   http.StatusCreated,
 			response: `{"status":201,"message":"bookmark item created: /A/B/C/Test"}`,
 		},
 		{
 			name:     "Wrong payload",
 			payload:  "",
+			jwt:      jwt,
 			status:   http.StatusBadRequest,
 			response: `{"status":400,"message":"invalid request: EOF"}`,
+		},
+		{
+			name:     "No jwt auth token",
+			payload:  "",
+			jwt:      "",
+			status:   http.StatusUnauthorized,
+			response: `{"message":"Invalid authentication, no JWT token present!","status":401}`,
 		},
 	}
 
@@ -100,7 +110,7 @@ func TestCreateBookmark(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			req, _ := http.NewRequest("POST", "/api/v1/bookmarks", strings.NewReader(tc.payload))
-			req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
+			req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", tc.jwt))
 			req.Header.Add("Content-Type", "application/json")
 			router.ServeHTTP(w, req)
 
