@@ -2,9 +2,15 @@ package models
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+)
 
-	"github.com/go-chi/render"
+const (
+	// Node is a single bookmark entry
+	Node string = "node"
+	// Folder is a grouping/hierarchy structure to hold bookmarks
+	Folder string = "folder"
 )
 
 // Bookmark is the view-model returned by the API
@@ -14,6 +20,19 @@ type Bookmark struct {
 	URL         string `json:"url"`
 	NodeID      string `json:"nodeId,omitempty"`
 	SortOrder   uint8  `json:"sortOrder"`
+	Type        string `json:"type"`
+}
+
+// Validate the bookmark object based on required fields
+func (b Bookmark) Validate() error {
+	if b.Path == "" {
+		return fmt.Errorf("cannot use an empty path")
+	}
+	if b.Type == Node && b.URL == "" {
+		return fmt.Errorf("a bookmarks needs an URL")
+	}
+
+	return nil
 }
 
 // BookmarkRequest is the request payload for Bookmark data model.
@@ -41,55 +60,35 @@ type BookmarkResponse struct {
 }
 
 // NewBookmarkResponse creates the response object needed for render
-func NewBookmarkResponse(bookmark *Bookmark) *BookmarkResponse {
-	resp := &BookmarkResponse{Bookmark: bookmark}
+func NewBookmarkResponse(bookmark Bookmark) BookmarkResponse {
+	resp := BookmarkResponse{Bookmark: &bookmark}
 	return resp
 }
 
 // Render the specific response
-func (b *BookmarkResponse) Render(w http.ResponseWriter, r *http.Request) error {
+func (b BookmarkResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	// Pre-processing before a response is marshalled and sent across the wire
 	return nil
 }
 
 // BookmarkListResponse defines a list type
 type BookmarkListResponse struct {
-	Count int                 `json:"count"`
-	List  []*BookmarkResponse `json:"result"`
+	Count int                `json:"count"`
+	List  []BookmarkResponse `json:"result"`
 }
 
 // Render the specific response
-func (b *BookmarkListResponse) Render(w http.ResponseWriter, r *http.Request) error {
+func (b BookmarkListResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	// Pre-processing before a response is marshalled and sent across the wire
 	return nil
 }
 
 // NewBookmarkListResponse creates the response for a list of objects
-func NewBookmarkListResponse(bookmarks []*Bookmark) *BookmarkListResponse {
-	var list []*BookmarkResponse
+func NewBookmarkListResponse(bookmarks []Bookmark) BookmarkListResponse {
+	var list = make([]BookmarkResponse, 0)
 	for _, bookmark := range bookmarks {
 		list = append(list, NewBookmarkResponse(bookmark))
 	}
-	resp := &BookmarkListResponse{Count: len(list), List: list}
+	resp := BookmarkListResponse{Count: len(list), List: list}
 	return resp
-}
-
-// SuccessResponse defines a generic success status
-type SuccessResponse struct {
-	HTTPStatusCode int    `json:"status"`            // http response status code
-	Message        string `json:"message,omitempty"` // application-level message
-}
-
-// SuccessResult created a success result
-func SuccessResult(code int, message string) render.Renderer {
-	return &SuccessResponse{
-		HTTPStatusCode: code,
-		Message:        message,
-	}
-}
-
-// Render is the overloaded method for the ErrResponse
-func (s *SuccessResponse) Render(w http.ResponseWriter, r *http.Request) error {
-	render.Status(r, s.HTTPStatusCode)
-	return nil
 }

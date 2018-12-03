@@ -63,6 +63,7 @@ func setupAPI(config conf.Configuration, ddlFilePath string) *chi.Mux {
 			r.Post("/", b.Create)
 			r.Put("/", b.Update)
 			r.Get("/{NodeID}", b.GetByID)
+			r.Get("/path", b.FindByPath)
 		})
 	})
 	return r

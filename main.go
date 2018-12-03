@@ -21,21 +21,17 @@ import (
 // graceful stop taken from https://gist.github.com/peterhellberg/38117e546c217960747aacf689af3dc2
 func main() {
 	srv := setup()
-
 	go func() {
 		log.Printf("%s Starting server ...", emoji.EmojiTagToUnicode(`:rocket:`))
-		log.Printf("%s Listening on '%s' %s\n", emoji.EmojiTagToUnicode(`:computer:`), srv.Addr, emoji.EmojiTagToUnicode(`:+1:`))
-
+		log.Printf("%s Listening on '%s'\n", emoji.EmojiTagToUnicode(`:computer:`), srv.Addr)
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatal(err)
 		}
 	}()
-
 	graceful(srv, 5*time.Second)
 }
 
 func configFromEnv() (host, port, basePath, configFile string) {
-
 	port = getOrDefault("APPLICATION_SERVER_PORT", "3000")
 	host = getOrDefault("APPLICATION_SEVER_HOST", "localhost")
 	basePath = getOrDefault("APPLICATION_BASE_PATH", "./")
@@ -46,17 +42,17 @@ func configFromEnv() (host, port, basePath, configFile string) {
 func configFromFile(appBasePath, configFileName string) conf.Configuration {
 	dir, err := filepath.Abs(appBasePath)
 	if err != nil {
-		panic("Could not get the application basepath!")
+		panic(fmt.Sprintf("Could not get the application basepath: %v", err))
 	}
-	configFile, err := os.Open(path.Join(dir, configFileName))
+	f, err := os.Open(path.Join(dir, configFileName))
 	if err != nil {
-		panic(fmt.Sprintf("Specified config file '%s' missing!", configFileName))
+		panic(fmt.Sprintf("Could not open specific config file '%s': %v", configFileName, err))
 	}
-	defer configFile.Close()
+	defer f.Close()
 
-	config, err := conf.Settings(configFile)
+	config, err := conf.Settings(f)
 	if err != nil {
-		panic("No config values available to start the server. Missing config.json file!")
+		panic(fmt.Sprintf("Could not get server config values from file '%s': %v", configFileName, err))
 	}
 	return *config
 }
@@ -70,17 +66,14 @@ func getOrDefault(env, def string) string {
 }
 
 func setup() *http.Server {
-	// either get the server host:port from the environment
-	// or use sensible defaults
 	host, port, basePath, configFile := configFromEnv()
-	// config file contains necessary settings fo the server
 	conf := configFromFile(basePath, configFile)
-	// define logging settings
-	logger.InitLogger(conf.Log)
 
-	s := bookmarks.SetupAPI(conf)
+	logger.InitLogger(conf.Log)
+	h := bookmarks.SetupAPI(conf)
+
 	addr := host + ":" + port
-	srv := &http.Server{Addr: addr, Handler: s}
+	srv := &http.Server{Addr: addr, Handler: h}
 	return srv
 }
 

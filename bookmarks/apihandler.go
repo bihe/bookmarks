@@ -20,9 +20,43 @@ type BookmarkController struct {
 // GetAll retrieves the complete list of bookmarks entries from the store
 func (app *BookmarkController) GetAll(w http.ResponseWriter, r *http.Request) {
 	var err error
-	var bookmarks []store.BookmarkItem
-	if bookmarks, err = app.uow.GetAllBookmarks(); err != nil {
+	var bookmarks = make([]store.BookmarkItem, 0)
+	if bookmarks, err = app.uow.AllBookmarks(); err != nil {
 		render.Render(w, r, models.ErrNotFound(err))
+		return
+	}
+	render.Render(w, r, models.NewBookmarkListResponse(mapBookmarks(bookmarks)))
+}
+
+// GetByID returns a single bookmark item, path param :NodeId
+func (app *BookmarkController) GetByID(w http.ResponseWriter, r *http.Request) {
+	nodeID := chi.URLParam(r, "NodeID")
+	if nodeID == "" {
+		render.Render(w, r, models.ErrInvalidRequest(fmt.Errorf("missing id to load bookmark")))
+		return
+	}
+	var item *store.BookmarkItem
+	var err error
+	if item, err = app.uow.BookmarkByID(nodeID); err != nil {
+		render.Render(w, r, models.ErrNotFound(err))
+		return
+	}
+	render.Render(w, r, models.NewBookmarkResponse(mapBookmark(*item)))
+}
+
+// FindByPath returns bookmarks/folders with the given path
+// the path to find is provided as a query string
+func (app *BookmarkController) FindByPath(w http.ResponseWriter, r *http.Request) {
+	var err error
+	var bookmarks []store.BookmarkItem
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		render.Render(w, r, models.ErrInvalidRequest(fmt.Errorf("no path supplied or missing query-param 'path'")))
+		return
+	}
+	if bookmarks, err = app.uow.BookmarkByPath(path); err != nil {
+		render.Render(w, r, models.ErrNotFound(err))
+		return
 	}
 	render.Render(w, r, models.NewBookmarkListResponse(mapBookmarks(bookmarks)))
 }
@@ -36,12 +70,27 @@ func (app *BookmarkController) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bookmark = data.Bookmark
+	if err := bookmark.Validate(); err != nil {
+		render.Render(w, r, models.ErrInvalidRequest(fmt.Errorf("invalid bookmark object: %v", err)))
+		return
+	}
+	if bookmark.DisplayName == "" {
+		bookmark.DisplayName = bookmark.URL
+	}
+	t := store.Node
+	switch bookmark.Type {
+	case models.Node:
+		t = store.Node
+	case models.Folder:
+		t = store.Folder
+	}
 
 	err := app.uow.CreateBookmark(store.BookmarkItem{
 		DisplayName: bookmark.DisplayName,
 		Path:        bookmark.Path,
 		URL:         bookmark.URL,
 		SortOrder:   bookmark.SortOrder,
+		Type:        t,
 	})
 	if err != nil {
 		render.Render(w, r, models.ErrInvalidRequest(err))
@@ -63,6 +112,13 @@ func (app *BookmarkController) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bookmark = data.Bookmark
+	if err := bookmark.Validate(); err != nil {
+		render.Render(w, r, models.ErrInvalidRequest(fmt.Errorf("invalid bookmark object: %v", err)))
+		return
+	}
+	if bookmark.DisplayName == "" {
+		bookmark.DisplayName = bookmark.URL
+	}
 
 	err := app.uow.UpdateBookmark(store.BookmarkItem{
 		ItemID:      bookmark.NodeID,
@@ -78,36 +134,28 @@ func (app *BookmarkController) Update(w http.ResponseWriter, r *http.Request) {
 	render.Render(w, r, models.SuccessResult(http.StatusOK, fmt.Sprintf("bookmark item updated: %s/%s", bookmark.Path, bookmark.DisplayName)))
 }
 
-// GetByID returns a single bookmark item, path param :NodeId
-func (app *BookmarkController) GetByID(w http.ResponseWriter, r *http.Request) {
-	nodeID := chi.URLParam(r, "NodeID")
-	if nodeID == "" {
-		render.Render(w, r, models.ErrInvalidRequest(fmt.Errorf("missing id to load bookmark")))
-		return
+func mapBookmark(item store.BookmarkItem) models.Bookmark {
+	var t string
+	switch item.Type {
+	case store.Node:
+		t = models.Node
+	case store.Folder:
+		t = models.Folder
 	}
-	var item *store.BookmarkItem
-	var err error
-	if item, err = app.uow.GetItemByID(nodeID); err != nil {
-		render.Render(w, r, models.ErrNotFound(err))
-		return
-	}
-	render.Render(w, r, models.NewBookmarkResponse(mapBookmark(item)))
-}
-
-func mapBookmark(item *store.BookmarkItem) *models.Bookmark {
-	return &models.Bookmark{
+	return models.Bookmark{
 		DisplayName: item.DisplayName,
 		Path:        item.Path,
 		NodeID:      item.ItemID,
 		SortOrder:   item.SortOrder,
 		URL:         item.URL,
+		Type:        t,
 	}
 }
 
-func mapBookmarks(vs []store.BookmarkItem) []*models.Bookmark {
-	vsm := make([]*models.Bookmark, len(vs))
+func mapBookmarks(vs []store.BookmarkItem) []models.Bookmark {
+	vsm := make([]models.Bookmark, len(vs))
 	for i, v := range vs {
-		vsm[i] = mapBookmark(&v)
+		vsm[i] = mapBookmark(v)
 	}
 	return vsm
 }
