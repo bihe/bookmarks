@@ -57,7 +57,7 @@ func setupAPI(config core.Configuration, ddlFilePath string) *chi.Mux {
 		if ddlFilePath != "" {
 			uow.InitSchema(ddlFilePath)
 		}
-		b := &BookmarkController{
+		b := &BookmarkAPI{
 			uow: uow,
 		}
 		r.Route("/bookmarks", func(r chi.Router) {

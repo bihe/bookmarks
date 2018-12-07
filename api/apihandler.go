@@ -11,13 +11,13 @@ import (
 	"github.com/go-chi/render"
 )
 
-// BookmarkController combines the API methods of the bookmarks logic
-type BookmarkController struct {
+// BookmarkAPI combines the API methods of the bookmarks logic
+type BookmarkAPI struct {
 	uow *store.UnitOfWork
 }
 
 // GetAll retrieves the complete list of bookmarks entries from the store
-func (app *BookmarkController) GetAll(w http.ResponseWriter, r *http.Request) {
+func (app *BookmarkAPI) GetAll(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var bookmarks = make([]store.BookmarkItem, 0)
 	if bookmarks, err = app.uow.AllBookmarks(); err != nil {
@@ -28,7 +28,7 @@ func (app *BookmarkController) GetAll(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetByID returns a single bookmark item, path param :NodeId
-func (app *BookmarkController) GetByID(w http.ResponseWriter, r *http.Request) {
+func (app *BookmarkAPI) GetByID(w http.ResponseWriter, r *http.Request) {
 	nodeID := chi.URLParam(r, "NodeID")
 	if nodeID == "" {
 		render.Render(w, r, ErrInvalidRequest(fmt.Errorf("missing id to load bookmark")))
@@ -45,7 +45,7 @@ func (app *BookmarkController) GetByID(w http.ResponseWriter, r *http.Request) {
 
 // FindByPath returns bookmarks/folders with the given path
 // the path to find is provided as a query string
-func (app *BookmarkController) FindByPath(w http.ResponseWriter, r *http.Request) {
+func (app *BookmarkAPI) FindByPath(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var bookmarks []store.BookmarkItem
 	path := r.URL.Query().Get("path")
@@ -61,7 +61,7 @@ func (app *BookmarkController) FindByPath(w http.ResponseWriter, r *http.Request
 }
 
 // Create will save a new bookmark entry
-func (app *BookmarkController) Create(w http.ResponseWriter, r *http.Request) {
+func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 	var bookmark *Bookmark
 	data := &BookmarkRequest{}
 	if err := render.Bind(r, data); err != nil {
@@ -99,7 +99,7 @@ func (app *BookmarkController) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // Update a bookmark item with new values
-func (app *BookmarkController) Update(w http.ResponseWriter, r *http.Request) {
+func (app *BookmarkAPI) Update(w http.ResponseWriter, r *http.Request) {
 	var bookmark *Bookmark
 	data := &BookmarkRequest{}
 	if err := render.Bind(r, data); err != nil {
