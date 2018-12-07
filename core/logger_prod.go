@@ -1,6 +1,6 @@
 // +build prod
 
-package logger
+package core
 
 import (
 	"io"

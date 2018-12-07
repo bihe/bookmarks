@@ -12,9 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bihe/bookmarks/bookmarks"
-	"github.com/bihe/bookmarks/bookmarks/conf"
-	"github.com/bihe/bookmarks/bookmarks/logger"
+	"github.com/bihe/bookmarks/api"
+	"github.com/bihe/bookmarks/core"
 	"github.com/wangii/emoji"
 )
 
@@ -39,7 +38,7 @@ func configFromEnv() (host, port, basePath, configFile string) {
 	return
 }
 
-func configFromFile(appBasePath, configFileName string) conf.Configuration {
+func configFromFile(appBasePath, configFileName string) core.Configuration {
 	dir, err := filepath.Abs(appBasePath)
 	if err != nil {
 		panic(fmt.Sprintf("Could not get the application basepath: %v", err))
@@ -50,7 +49,7 @@ func configFromFile(appBasePath, configFileName string) conf.Configuration {
 	}
 	defer f.Close()
 
-	config, err := conf.Settings(f)
+	config, err := core.Settings(f)
 	if err != nil {
 		panic(fmt.Sprintf("Could not get server config values from file '%s': %v", configFileName, err))
 	}
@@ -69,8 +68,8 @@ func setup() *http.Server {
 	host, port, basePath, configFile := configFromEnv()
 	conf := configFromFile(basePath, configFile)
 
-	logger.InitLogger(conf.Log)
-	h := bookmarks.SetupAPI(conf)
+	core.InitLogger(conf.Log)
+	h := api.SetupAPI(conf)
 
 	addr := host + ":" + port
 	srv := &http.Server{Addr: addr, Handler: h}

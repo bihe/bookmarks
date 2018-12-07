@@ -1,16 +1,14 @@
 // +build !prod
 
-package logger
+package core
 
 import (
 	"log"
 	"os"
-
-	"github.com/bihe/bookmarks/bookmarks/conf"
 )
 
 // InitLogger performs a setup for the logging mechanism
-func InitLogger(conf conf.LogConfig) {
+func InitLogger(conf LogConfig) {
 	log.SetPrefix(LogPrefix(conf))
 	log.SetOutput(os.Stdout)
 }

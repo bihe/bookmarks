@@ -1,4 +1,4 @@
-package bookmarks_test
+package api
 
 import (
 	"fmt"
@@ -10,20 +10,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bihe/bookmarks/bookmarks"
-	"github.com/bihe/bookmarks/bookmarks/conf"
+	"github.com/bihe/bookmarks/core"
 	jwt "github.com/dgrijalva/jwt-go"
 )
 
-func getTestConfig() conf.Configuration {
-	return conf.Configuration{
-		DB: conf.Database{Dialect: "sqlite3", Connection: ":memory:"},
-		Sec: conf.Security{
+func getTestConfig() core.Configuration {
+	return core.Configuration{
+		DB: core.Database{Dialect: "sqlite3", Connection: ":memory:"},
+		Sec: core.Security{
 			JwtIssuer:     "i",
 			JwtSecret:     "s",
 			CookieName:    "c",
 			LoginRedirect: "http://locahost/redirect",
-			Claim:         conf.Claim{Name: "bookmarks", URL: "http://localhost", Roles: []string{"User"}},
+			Claim:         core.Claim{Name: "bookmarks", URL: "http://localhost", Roles: []string{"User"}},
 		},
 	}
 }
@@ -32,7 +31,7 @@ type CustomClaims struct {
 	Type        string   `json:"Type"`
 	UserName    string   `json:"UserName"`
 	Email       string   `json:"Email"`
-	UserId      string   `json:"UserId"`
+	UserID      string   `json:"UserId"`
 	DisplayName string   `json:"DisplayName"`
 	Surname     string   `json:"Surname"`
 	GivenName   string   `json:"GivenName"`
@@ -83,7 +82,7 @@ func TestCreateBookmark(t *testing.T) {
 		t.Fatalf("Could not get ddl file for sqlite in memory db!")
 	}
 
-	router := bookmarks.SetupAPIInitDB(getTestConfig(), ddlFilePath)
+	router := SetupAPIInitDB(getTestConfig(), ddlFilePath)
 	jwt := createToken()
 	tt := []struct {
 		name     string

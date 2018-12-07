@@ -1,13 +1,13 @@
 package security
 
 import (
+	"github.com/bihe/bookmarks/core"
 	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
 
-	"github.com/bihe/bookmarks/bookmarks/conf"
 	"github.com/bihe/bookmarks/pkg/httpcontext"
 )
 
@@ -81,7 +81,7 @@ func (jwt *JwtMiddleware) JWTContext(next http.Handler) http.Handler {
 			Username:    payload.UserName,
 		}
 
-		ctx := context.WithValue(r.Context(), conf.ContextUser, user)
+		ctx := context.WithValue(r.Context(), core.ContextUser, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

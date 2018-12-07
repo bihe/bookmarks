@@ -1,33 +1,35 @@
-package bookmarks
+package api
 
 import (
 	"time"
 
-	"github.com/bihe/bookmarks/bookmarks/conf"
-	"github.com/bihe/bookmarks/bookmarks/security"
-	"github.com/bihe/bookmarks/bookmarks/store"
+	"github.com/bihe/bookmarks/core"
+	"github.com/bihe/bookmarks/security"
+	"github.com/bihe/bookmarks/store"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
 )
 
 // SetupAPIInitDB configures the API and inits the DB - execute ddl.sql
-func SetupAPIInitDB(config conf.Configuration, ddlFilePath string) *chi.Mux {
+func SetupAPIInitDB(config core.Configuration, ddlFilePath string) *chi.Mux {
 	return setupAPI(config, ddlFilePath)
 }
 
 // SetupAPI configures the API
-func SetupAPI(config conf.Configuration) *chi.Mux {
+func SetupAPI(config core.Configuration) *chi.Mux {
 	return setupAPI(config, "")
 }
 
-func setupAPI(config conf.Configuration, ddlFilePath string) *chi.Mux {
+func setupAPI(config core.Configuration, ddlFilePath string) *chi.Mux {
 	r := chi.NewRouter()
 
 	// A good base middleware stack
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
+	r.Use(middleware.DefaultCompress)
+	r.Use(middleware.RedirectSlashes)
 	r.Use(middleware.Recoverer)
 	r.Use(render.SetContentType(render.ContentTypeJSON))
 
