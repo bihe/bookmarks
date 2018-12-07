@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bihe/bookmarks-go/bookmarks"
-	"github.com/bihe/bookmarks-go/bookmarks/conf"
+	"github.com/bihe/bookmarks/bookmarks"
+	"github.com/bihe/bookmarks/bookmarks/conf"
 	jwt "github.com/dgrijalva/jwt-go"
 )
 

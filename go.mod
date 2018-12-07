@@ -1,4 +1,4 @@
-module github.com/bihe/bookmarks-go
+module github.com/bihe/bookmarks
 
 require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible

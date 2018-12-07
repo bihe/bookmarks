@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/bihe/bookmarks-go/bookmarks/conf"
-	"github.com/bihe/bookmarks-go/bookmarks/models"
-	"github.com/bihe/bookmarks-go/bookmarks/security"
-	"github.com/bihe/bookmarks-go/bookmarks/store"
+	"github.com/bihe/bookmarks/bookmarks/conf"
+	"github.com/bihe/bookmarks/bookmarks/models"
+	"github.com/bihe/bookmarks/bookmarks/security"
+	"github.com/bihe/bookmarks/bookmarks/store"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 )

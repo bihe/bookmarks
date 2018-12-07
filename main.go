@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bihe/bookmarks-go/bookmarks"
-	"github.com/bihe/bookmarks-go/bookmarks/conf"
-	"github.com/bihe/bookmarks-go/bookmarks/logger"
+	"github.com/bihe/bookmarks/bookmarks"
+	"github.com/bihe/bookmarks/bookmarks/conf"
+	"github.com/bihe/bookmarks/bookmarks/logger"
 	"github.com/wangii/emoji"
 )
 

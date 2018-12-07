@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bihe/bookmarks-go/bookmarks/conf"
-	"github.com/bihe/bookmarks-go/pkg/httpcontext"
+	"github.com/bihe/bookmarks/bookmarks/conf"
+	"github.com/bihe/bookmarks/pkg/httpcontext"
 )
 
 // AuthOptions defines presets for the Authentication handler

@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/bihe/bookmarks-go/bookmarks/conf"
+	"github.com/bihe/bookmarks/bookmarks/conf"
 )
 
 // InitLogger performs a setup for the logging mechanism
