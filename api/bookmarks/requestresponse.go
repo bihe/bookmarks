@@ -35,6 +35,9 @@ func (b Bookmark) Validate() error {
 	if b.Path == "" {
 		return fmt.Errorf("cannot use an empty path")
 	}
+	if strings.HasSuffix(b.Path, "/") && b.Path != "/" {
+		return fmt.Errorf("a path cannot end with '/")
+	}
 	if b.Type == Node && b.URL == "" {
 		return fmt.Errorf("a bookmarks needs an URL")
 	}

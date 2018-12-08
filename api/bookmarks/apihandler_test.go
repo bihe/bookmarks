@@ -132,6 +132,19 @@ func TestAPICreateBookmark(t *testing.T) {
 			response: `{"status":400,"message":"invalid request: invalid chars in 'DisplayName'"}`,
 		},
 		{
+			name: "Invalid path",
+			payload: `{
+				"path":"/a/",
+				"displayName":"Test",
+				"url": "http://a.b.c.de",
+				"sortOrder": 1,
+				"type": "node"
+			}`,
+			jwt:      jwt,
+			status:   http.StatusBadRequest,
+			response: `{"status":400,"message":"invalid request: a path cannot end with '/"}`,
+		},
+		{
 			name:     "Wrong payload",
 			payload:  "",
 			jwt:      jwt,
