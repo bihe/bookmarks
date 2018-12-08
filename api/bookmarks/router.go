@@ -1,4 +1,4 @@
-package api
+package bookmarks
 
 import (
 	"time"

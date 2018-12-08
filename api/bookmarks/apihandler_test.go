@@ -1,4 +1,4 @@
-package api
+package bookmarks_test
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bihe/bookmarks/api/bookmarks"
 	"github.com/bihe/bookmarks/core"
 	jwt "github.com/dgrijalva/jwt-go"
 )
@@ -69,20 +70,20 @@ func createToken() string {
 }
 
 func getSqliteDDL() string {
-	dir, err := filepath.Abs("../")
+	dir, err := filepath.Abs("../../")
 	if err != nil {
 		return ""
 	}
 	return path.Join(dir, "_db/", "ddl.sql")
 }
 
-func TestCreateBookmark(t *testing.T) {
+func TestAPICreateBookmark(t *testing.T) {
 	ddlFilePath := getSqliteDDL()
 	if ddlFilePath == "" {
 		t.Fatalf("Could not get ddl file for sqlite in memory db!")
 	}
 
-	router := SetupAPIInitDB(getTestConfig(), ddlFilePath)
+	router := bookmarks.SetupAPIInitDB(getTestConfig(), ddlFilePath)
 	jwt := createToken()
 	tt := []struct {
 		name     string

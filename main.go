@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bihe/bookmarks/api"
+	"github.com/bihe/bookmarks/api/bookmarks"
 	"github.com/bihe/bookmarks/core"
 	"github.com/wangii/emoji"
 )
@@ -69,7 +69,7 @@ func setup() *http.Server {
 	conf := configFromFile(basePath, configFile)
 
 	core.InitLogger(conf.Log)
-	h := api.SetupAPI(conf)
+	h := bookmarks.SetupAPI(conf)
 
 	addr := host + ":" + port
 	srv := &http.Server{Addr: addr, Handler: h}

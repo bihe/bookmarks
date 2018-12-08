@@ -1,10 +1,14 @@
-package api
+package bookmarks
 
 import (
 	"errors"
 	"fmt"
 	"net/http"
 )
+
+// --------------------------------------------------------------------------
+// define API request / response structures
+// --------------------------------------------------------------------------
 
 const (
 	// Node is a single bookmark entry
