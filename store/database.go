@@ -131,6 +131,21 @@ func (u *UnitOfWork) BookmarkByPath(path string) ([]BookmarkItem, error) {
 	return bookmarks, nil
 }
 
+// FolderByPathName returns the specified folder "name" located within the given "path"
+func (u *UnitOfWork) FolderByPathName(path, name string) (*BookmarkItem, error) {
+	var item BookmarkItem
+	if path == "" {
+		return nil, fmt.Errorf("cannot use an empty path")
+	}
+	if name == "" {
+		return nil, fmt.Errorf("cannot use an empty name")
+	}
+	if err := u.db.Get(&item, "SELECT * FROM bookmark_items WHERE path=$1 AND type=$2 AND display_name=$3", path, Folder, name); err != nil {
+		return nil, fmt.Errorf("could not get bookmark Folder for path '%s' and name '%s': %v", path, name, err)
+	}
+	return &item, nil
+}
+
 // InitSchema sets the sqlite database schema
 func (u *UnitOfWork) InitSchema(ddlFilePath string) error {
 	c, err := ioutil.ReadFile(ddlFilePath)

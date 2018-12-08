@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 // --------------------------------------------------------------------------
@@ -27,6 +28,8 @@ type Bookmark struct {
 	Type        string `json:"type"`
 }
 
+var invalCharsDisplayName = []string{"/", "?", "\\", "\"", "<", ">", "#", "%", "{", "}", "|", "\\", "^", "~", "`", ";", "@", ":", "=", "&"}
+
 // Validate the bookmark object based on required fields
 func (b Bookmark) Validate() error {
 	if b.Path == "" {
@@ -35,7 +38,11 @@ func (b Bookmark) Validate() error {
 	if b.Type == Node && b.URL == "" {
 		return fmt.Errorf("a bookmarks needs an URL")
 	}
-
+	for _, c := range invalCharsDisplayName {
+		if strings.ContainsAny(b.DisplayName, c) {
+			return fmt.Errorf("invalid chars in 'DisplayName'")
+		}
+	}
 	return nil
 }
 

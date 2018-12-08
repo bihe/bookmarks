@@ -105,4 +105,23 @@ func TestDBBookmarks(t *testing.T) {
 	if len(blist) != 1 {
 		t.Errorf("1 bookmarks should be returned by path /path, got %d", len(blist))
 	}
+
+	// create a bookmark 'Folder'
+	err = uow.CreateBookmark(store.BookmarkItem{
+		DisplayName: "a",
+		ItemID:      "folder",
+		Path:        "/",
+		Type:        store.Folder,
+	})
+	if err != nil {
+		t.Errorf("could not create a folder: %v", err)
+	}
+	b, err = uow.FolderByPathName("/", "a")
+	if err != nil {
+		t.Errorf("could not find the given folder %s: %v", "/a", err)
+	}
+	if b.Type != store.Folder {
+		t.Errorf("invalid bookmark type returned. expected %d, got %d", store.Folder, b.Type)
+	}
+
 }

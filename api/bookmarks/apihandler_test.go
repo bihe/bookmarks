@@ -95,14 +95,41 @@ func TestAPICreateBookmark(t *testing.T) {
 		{
 			name: "Create a new Bookmark",
 			payload: `{
-				"path":"/A/B/C",
+				"path":"/",
 				"displayName":"Test",
 				"url": "http://a.b.c.de",
-				"sortOrder": 1
+				"sortOrder": 1,
+				"type": "node"
 			}`,
 			jwt:      jwt,
 			status:   http.StatusCreated,
-			response: `{"status":201,"message":"bookmark item created: /A/B/C/Test"}`,
+			response: `{"status":201,"message":"bookmark item created: p:/, n:Test"}`,
+		},
+		{
+			name: "Missing folder",
+			payload: `{
+				"path":"/A",
+				"displayName":"Test",
+				"url": "http://a.b.c.de",
+				"sortOrder": 1,
+				"type": "node"
+			}`,
+			jwt:      jwt,
+			status:   http.StatusBadRequest,
+			response: `{"status":400,"message":"invalid request: cannot create item because of missing folder structure: the folder with path '/' and name 'A' does not exist"}`,
+		},
+		{
+			name: "Invalid characters",
+			payload: `{
+				"path":"/",
+				"displayName":"Test/",
+				"url": "http://a.b.c.de",
+				"sortOrder": 1,
+				"type": "node"
+			}`,
+			jwt:      jwt,
+			status:   http.StatusBadRequest,
+			response: `{"status":400,"message":"invalid request: invalid chars in 'DisplayName'"}`,
 		},
 		{
 			name:     "Wrong payload",

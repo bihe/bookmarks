@@ -13,6 +13,25 @@ import (
 )
 
 // --------------------------------------------------------------------------
+// validate a given path by checking if the folder-structure is avail in DB
+// --------------------------------------------------------------------------
+
+// dbFolderValidator checks for the existence of a 'Folder' item with the
+// given 'name' in the given 'path'
+type dbFolderValidator struct {
+	uow *store.UnitOfWork
+}
+
+func (d dbFolderValidator) Exists(path, name string) bool {
+	_, err := d.uow.FolderByPathName(path, name)
+	if err != nil {
+		return false
+	}
+	return true
+
+}
+
+// --------------------------------------------------------------------------
 // Bookmark API
 // --------------------------------------------------------------------------
 
@@ -66,6 +85,10 @@ func (app *BookmarkAPI) FindByPath(w http.ResponseWriter, r *http.Request) {
 }
 
 // Create will save a new bookmark entry
+// the bookmark entry has a given type. If the type is Folder, the URL is just ignored and not saved
+// if a bookmark is created with a given path, the method first checks if the path is available.
+// This availability check of the path determines if for each path segment a corresponding Folder node is
+// available. If the node is missing, the Node or Folder cannot be created for this path
 func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 	var bookmark *Bookmark
 	data := &BookmarkRequest{}
@@ -74,25 +97,35 @@ func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bookmark = data.Bookmark
+	// validate the supplied bookmark data for mandatory fields, invalid chars, ...
 	if err := bookmark.Validate(); err != nil {
-		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("invalid bookmark object: %v", err)))
+		render.Render(w, r, api.ErrInvalidRequest(err))
 		return
 	}
+	// check if the given folder-structure is available
+	if err := ValidatePath(bookmark.Path, dbFolderValidator{uow: app.uow}); err != nil {
+		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("cannot create item because of missing folder structure: %v", err)))
+		return
+	}
+
 	if bookmark.DisplayName == "" {
 		bookmark.DisplayName = bookmark.URL
 	}
+
 	t := store.Node
+	url := bookmark.URL
 	switch bookmark.Type {
 	case Node:
 		t = store.Node
 	case Folder:
 		t = store.Folder
+		url = ""
 	}
 
 	err := app.uow.CreateBookmark(store.BookmarkItem{
 		DisplayName: bookmark.DisplayName,
 		Path:        bookmark.Path,
-		URL:         bookmark.URL,
+		URL:         url,
 		SortOrder:   bookmark.SortOrder,
 		Type:        t,
 	})
@@ -100,10 +133,11 @@ func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, api.ErrInvalidRequest(err))
 		return
 	}
-	render.Render(w, r, api.SuccessResult(http.StatusCreated, fmt.Sprintf("bookmark item created: %s/%s", bookmark.Path, bookmark.DisplayName)))
+	render.Render(w, r, api.SuccessResult(http.StatusCreated, fmt.Sprintf("bookmark item created: p:%s, n:%s", bookmark.Path, bookmark.DisplayName)))
 }
 
-// Update a bookmark item with new values
+// Update a bookmark item with new values. The type of the bookmark Node/Folder is not updated.
+// It does not make any sense to change a bookmark Node with URL to a Folder
 func (app *BookmarkAPI) Update(w http.ResponseWriter, r *http.Request) {
 	var bookmark *Bookmark
 	data := &BookmarkRequest{}
@@ -116,19 +150,29 @@ func (app *BookmarkAPI) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bookmark = data.Bookmark
+	// validate the supplied bookmark data for mandatory fields, invalid chars, ...
 	if err := bookmark.Validate(); err != nil {
-		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("invalid bookmark object: %v", err)))
+		render.Render(w, r, api.ErrInvalidRequest(err))
+		return
+	}
+	// check if the given folder-structure is available
+	if err := ValidatePath(bookmark.Path, dbFolderValidator{uow: app.uow}); err != nil {
+		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("cannot create item because of missing folder structure: %v", err)))
 		return
 	}
 	if bookmark.DisplayName == "" {
 		bookmark.DisplayName = bookmark.URL
 	}
-
+	// the URL for a Folder does not make any sense
+	url := bookmark.URL
+	if bookmark.Type == Folder {
+		url = ""
+	}
 	err := app.uow.UpdateBookmark(store.BookmarkItem{
 		ItemID:      bookmark.NodeID,
 		DisplayName: bookmark.DisplayName,
 		Path:        bookmark.Path,
-		URL:         bookmark.URL,
+		URL:         url,
 		SortOrder:   bookmark.SortOrder,
 	})
 	if err != nil {
