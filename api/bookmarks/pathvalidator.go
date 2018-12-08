@@ -11,7 +11,7 @@ type Validator interface {
 	Exists(path, name string) bool
 }
 
-// ValidatePath is used to check the existances of a path. The method uses
+// ValidatePath is used to check the existence of a path. The method uses
 // recursion and starts with the 'last' path and traverses 'up' the tree
 // e.g. path: /a/b/c/d
 // validate, if a Folder node is present for
