@@ -83,7 +83,6 @@ func (u *UnitOfWork) UpdateBookmark(item BookmarkItem) error {
 	if item.ItemID == "" {
 		return fmt.Errorf("no ID for bookmark provided, cannot update")
 	}
-
 	var err error
 	_, err = u.BookmarkByID(item.ItemID)
 	if err != nil {
@@ -112,6 +111,9 @@ func (u *UnitOfWork) UpdateBookmark(item BookmarkItem) error {
 // BookmarkByID queries the item by the given itemID
 func (u *UnitOfWork) BookmarkByID(itemID string) (*BookmarkItem, error) {
 	var item BookmarkItem
+	if itemID == "" {
+		return nil, fmt.Errorf("cannot use an empty ID")
+	}
 	if err := u.db.Get(&item, "SELECT * FROM bookmark_items WHERE item_id=$1", itemID); err != nil {
 		return nil, fmt.Errorf("could not get bookmark by ID:'%s': %v", itemID, err)
 	}
