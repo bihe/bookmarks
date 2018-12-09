@@ -30,11 +30,12 @@ func TestDBBookmarks(t *testing.T) {
 		Path:        "/",
 		Type:        store.Node,
 		URL:         "http://url",
+		Username:    "A",
 	})
 	if err != nil {
 		t.Errorf("cannot create bookmark item: %v", err)
 	}
-	bookmarks, err := uow.AllBookmarks()
+	bookmarks, err := uow.AllBookmarks("A")
 	if err != nil {
 		t.Errorf("cannot get bookmarks: %v", err)
 	}
@@ -49,6 +50,7 @@ func TestDBBookmarks(t *testing.T) {
 		Path:        "/",
 		Type:        store.Node,
 		URL:         "http://url",
+		Username:    "A",
 	})
 	if err == nil {
 		t.Errorf("unique constraint for path/displayname: %v", err)
@@ -61,6 +63,7 @@ func TestDBBookmarks(t *testing.T) {
 		Path:        "/",
 		Type:        store.Node,
 		URL:         "http://url",
+		Username:    "A",
 	})
 	if err != nil {
 		t.Errorf("cannot update bookmark: %v", err)
@@ -68,7 +71,7 @@ func TestDBBookmarks(t *testing.T) {
 
 	// verify the update
 	var b *store.BookmarkItem
-	b, err = uow.BookmarkByID("id")
+	b, err = uow.BookmarkByID("id", "A")
 	if err != nil {
 		t.Errorf("cannot get bookmark by id: %v", err)
 	}
@@ -83,6 +86,7 @@ func TestDBBookmarks(t *testing.T) {
 		Path:        "/path",
 		Type:        store.Node,
 		URL:         "http://url",
+		Username:    "A",
 	})
 	if err != nil {
 		t.Errorf("cannot create bookmark item: %v", err)
@@ -90,7 +94,7 @@ func TestDBBookmarks(t *testing.T) {
 
 	// get bookmarks by path
 	var blist []store.BookmarkItem
-	blist, err = uow.BookmarkByPath("/")
+	blist, err = uow.BookmarkByPath("/", "A")
 	if err != nil {
 		t.Errorf("cannot get bookmark by path /: %v", err)
 	}
@@ -98,7 +102,7 @@ func TestDBBookmarks(t *testing.T) {
 		t.Errorf("1 bookmarks should be returned by path /, got %d", len(blist))
 	}
 
-	blist, err = uow.BookmarkByPath("/path")
+	blist, err = uow.BookmarkByPath("/path", "A")
 	if err != nil {
 		t.Errorf("cannot get bookmark by path /path: %v", err)
 	}
@@ -112,11 +116,12 @@ func TestDBBookmarks(t *testing.T) {
 		ItemID:      "folder",
 		Path:        "/",
 		Type:        store.Folder,
+		Username:    "A",
 	})
 	if err != nil {
 		t.Errorf("could not create a folder: %v", err)
 	}
-	b, err = uow.FolderByPathName("/", "a")
+	b, err = uow.FolderByPathName("/", "a", "A")
 	if err != nil {
 		t.Errorf("could not find the given folder %s: %v", "/a", err)
 	}

@@ -26,6 +26,9 @@ type Bookmark struct {
 	NodeID      string `json:"nodeId,omitempty"`
 	SortOrder   uint8  `json:"sortOrder"`
 	Type        string `json:"type"`
+	Created     int32  `json:"created"`
+	Modified    int32  `json:"modified"`
+	UserName    string `json:"username"`
 }
 
 var invalCharsDisplayName = []string{"/", "?", "\\", "\"", "<", ">", "#", "%", "{", "}", "|", "\\", "^", "~", "`", ";", "@", ":", "=", "&"}

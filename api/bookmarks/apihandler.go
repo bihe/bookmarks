@@ -19,11 +19,12 @@ import (
 // dbFolderValidator checks for the existence of a 'Folder' item with the
 // given 'name' in the given 'path'
 type dbFolderValidator struct {
-	uow *store.UnitOfWork
+	uow  *store.UnitOfWork
+	user string
 }
 
 func (d dbFolderValidator) Exists(path, name string) bool {
-	_, err := d.uow.FolderByPathName(path, name)
+	_, err := d.uow.FolderByPathName(path, name, d.user)
 	if err != nil {
 		return false
 	}
@@ -44,7 +45,7 @@ type BookmarkAPI struct {
 func (app *BookmarkAPI) GetAll(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var bookmarks = make([]store.BookmarkItem, 0)
-	if bookmarks, err = app.uow.AllBookmarks(); err != nil {
+	if bookmarks, err = app.uow.AllBookmarks(user(r).Username); err != nil {
 		render.Render(w, r, api.ErrNotFound(err))
 		return
 	}
@@ -60,7 +61,7 @@ func (app *BookmarkAPI) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 	var item *store.BookmarkItem
 	var err error
-	if item, err = app.uow.BookmarkByID(nodeID); err != nil {
+	if item, err = app.uow.BookmarkByID(nodeID, user(r).Username); err != nil {
 		render.Render(w, r, api.ErrNotFound(err))
 		return
 	}
@@ -77,7 +78,7 @@ func (app *BookmarkAPI) FindByPath(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("no path supplied or missing query-param 'path'")))
 		return
 	}
-	if bookmarks, err = app.uow.BookmarkByPath(path); err != nil {
+	if bookmarks, err = app.uow.BookmarkByPath(path, user(r).Username); err != nil {
 		render.Render(w, r, api.ErrNotFound(err))
 		return
 	}
@@ -103,7 +104,7 @@ func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// check if the given folder-structure is available
-	if err := ValidatePath(bookmark.Path, dbFolderValidator{uow: app.uow}); err != nil {
+	if err := ValidatePath(bookmark.Path, dbFolderValidator{uow: app.uow, user: user(r).Username}); err != nil {
 		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("cannot create item because of missing folder structure: %v", err)))
 		return
 	}
@@ -128,6 +129,7 @@ func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 		URL:         url,
 		SortOrder:   bookmark.SortOrder,
 		Type:        t,
+		Username:    user(r).Username,
 	})
 	if err != nil {
 		render.Render(w, r, api.ErrInvalidRequest(err))
@@ -150,14 +152,19 @@ func (app *BookmarkAPI) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bookmark = data.Bookmark
+
+	if _, err := app.uow.BookmarkByID(bookmark.NodeID, user(r).Username); err != nil {
+		render.Render(w, r, api.ErrNotFound(fmt.Errorf("bookmark with ID '%s' not available", bookmark.NodeID)))
+		return
+	}
 	// validate the supplied bookmark data for mandatory fields, invalid chars, ...
 	if err := bookmark.Validate(); err != nil {
 		render.Render(w, r, api.ErrInvalidRequest(err))
 		return
 	}
 	// check if the given folder-structure is available
-	if err := ValidatePath(bookmark.Path, dbFolderValidator{uow: app.uow}); err != nil {
-		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("cannot create item because of missing folder structure: %v", err)))
+	if err := ValidatePath(bookmark.Path, dbFolderValidator{uow: app.uow, user: user(r).Username}); err != nil {
+		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("cannot update item because of missing folder structure: %v", err)))
 		return
 	}
 	if bookmark.DisplayName == "" {
@@ -174,6 +181,7 @@ func (app *BookmarkAPI) Update(w http.ResponseWriter, r *http.Request) {
 		Path:        bookmark.Path,
 		URL:         url,
 		SortOrder:   bookmark.SortOrder,
+		Username:    user(r).Username,
 	})
 	if err != nil {
 		render.Render(w, r, api.ErrInvalidRequest(err))
@@ -201,6 +209,9 @@ func mapBookmark(item store.BookmarkItem) Bookmark {
 		SortOrder:   item.SortOrder,
 		URL:         item.URL,
 		Type:        t,
+		Modified:    item.Modified,
+		Created:     item.Created,
+		UserName:    item.Username,
 	}
 }
 
