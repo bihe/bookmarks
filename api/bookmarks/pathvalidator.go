@@ -12,7 +12,7 @@ type Validator interface {
 }
 
 // ValidatePath is used to check the existence of a path. The method uses
-// recursion and starts with the 'last' path and traverses 'up' the tree
+// recursion and starts with the 'last' path and traverses 'down' the tree
 // e.g. path: /a/b/c/d
 // validate, if a Folder node is present for
 //	- segment: /a 		-> path: /, 		name: a
@@ -31,8 +31,10 @@ func ValidatePath(path string, check Validator) error {
 	if i == -1 {
 		return fmt.Errorf("not a valid path, no path seperator '/' found")
 	}
-	p := path[0:i]
-	n := path[i+1:]
+	// split up the path before the last '/' and the element after
+	// for the path /a/b/c/d the result is:
+	p := path[0:i]  // e.g. /a/b/c
+	n := path[i+1:] // e.g. d
 	if i == 0 {
 		// a path always starts with '/'
 		// assign it for i=0
