@@ -23,5 +23,9 @@
             "maxAge": 7,
             "compressFile": false
         }
+    },
+    "fileServer": {
+	    "path": "/tmp",
+	    "urlPath": "/ui"
     }
 }

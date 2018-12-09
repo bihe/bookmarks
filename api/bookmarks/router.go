@@ -1,6 +1,8 @@
 package bookmarks
 
 import (
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/bihe/bookmarks/core"
@@ -38,6 +40,25 @@ func setupAPI(config core.Configuration, ddlFilePath string) *chi.Mux {
 	// processing should be stopped.
 	r.Use(middleware.Timeout(60 * time.Second))
 
+	// configure JWT authentication and use JWT middleware
+	j := &security.JwtMiddleware{
+		Options: security.AuthOptions{
+			CookieName: config.Sec.CookieName,
+			JwtIssuer:  config.Sec.JwtIssuer,
+			JwtSecret:  config.Sec.JwtSecret,
+			RequiredClaim: security.Claim{
+				Name:  config.Sec.Claim.Name,
+				URL:   config.Sec.Claim.URL,
+				Roles: config.Sec.Claim.Roles,
+			},
+			RedirectURL: config.Sec.LoginRedirect,
+		},
+	}
+	r.Use(j.JWTContext)
+
+	// setup static file serving
+	fileServer(r, config.FS.URLPath, http.Dir(config.FS.Path))
+
 	r.Route("/api/v1", func(r chi.Router) {
 		j := &security.JwtMiddleware{
 			Options: security.AuthOptions{
@@ -69,4 +90,22 @@ func setupAPI(config core.Configuration, ddlFilePath string) *chi.Mux {
 		})
 	})
 	return r
+}
+
+func fileServer(r chi.Router, path string, root http.FileSystem) {
+	if path == "" {
+		panic("no path for fileServer defined!")
+	}
+	if strings.ContainsAny(path, "{}*") {
+		panic("fileServer does not permit URL parameters.")
+	}
+	fs := http.StripPrefix(path, http.FileServer(root))
+	// add a slash to the end of the path
+	if path != "/" && path[len(path)-1] != '/' {
+		path += "/"
+	}
+	path += "*"
+	r.Get(path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fs.ServeHTTP(w, r)
+	}))
 }

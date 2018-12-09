@@ -8,9 +8,10 @@ import (
 
 // Configuration holds the application configuration
 type Configuration struct {
-	Sec Security  `json:"security"`
-	DB  Database  `json:"database"`
-	Log LogConfig `json:"logging"`
+	Sec Security   `json:"security"`
+	DB  Database   `json:"database"`
+	Log LogConfig  `json:"logging"`
+	FS  FileServer `json:"fileServer"`
 }
 
 // Security settings for the application
@@ -43,11 +44,17 @@ type LogConfig struct {
 
 // RollingLogger defines settings to use for rolling file loggers
 type RollingLogger struct {
-	FilePath   string `json:"filePath"` // in megabytes
-	MaxSize    int    `json:"maxFileSize"`
+	FilePath   string `json:"filePath"`
+	MaxSize    int    `json:"maxFileSize"` // in megabytes
 	MaxBackups int    `json:"numberOfMaxBackups"`
 	MaxAge     int    `json:"maxAge"` // days
 	Compress   bool   `json:"compressFile"`
+}
+
+// FileServer defines the settings for serving static files
+type FileServer struct {
+	Path    string `json:"path"`
+	URLPath string `json:"urlPath"`
 }
 
 // Settings returns application configuration values

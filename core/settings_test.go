@@ -30,6 +30,10 @@ const config = `{
 		"maxAge": 7,
 		"compressFile": false
 	}
+    },
+    "fileServer": {
+	    "path": "/tmp",
+	    "urlPath": "/ui"
     }
 }`
 
@@ -48,12 +52,17 @@ func TestConfigReader(t *testing.T) {
 	if config.Log.Prefix != "prefix" {
 		t.Error("Could not read logging settings!")
 	}
-
 	if config.Log.Rolling.FilePath != "/temp/file" {
 		t.Error("Could not read rolling file settings!")
 	}
-
 	if config.Log.Rolling.MaxBackups != 4 {
 		t.Error("Could not read rolling file settings!")
+	}
+
+	if config.FS.Path != "/tmp" {
+		t.Error("Could not read FileServer path!")
+	}
+	if config.FS.URLPath != "/ui" {
+		t.Error("Could not read UrlPath!")
 	}
 }

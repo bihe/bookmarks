@@ -25,6 +25,10 @@ func getTestConfig() core.Configuration {
 			LoginRedirect: "http://locahost/redirect",
 			Claim:         core.Claim{Name: "bookmarks", URL: "http://localhost", Roles: []string{"User"}},
 		},
+		FS: core.FileServer{
+			Path:    "/tmp",
+			URLPath: "/static",
+		},
 	}
 }
 
