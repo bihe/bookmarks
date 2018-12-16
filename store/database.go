@@ -1,8 +1,11 @@
 package store
 
 import (
+	"database/sql"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -50,6 +53,9 @@ type BookmarkItem struct {
 // AllBookmarks returns all available bookmarks
 func (u *UnitOfWork) AllBookmarks(username string) ([]BookmarkItem, error) {
 	var bookmarks []BookmarkItem
+	if username == "" {
+		return nil, fmt.Errorf("cannot use empty Username")
+	}
 	if err := u.db.Select(&bookmarks, "SELECT * FROM bookmark_items WHERE user_name=? ORDER BY path, sort_order ASC", username); err != nil {
 		return nil, err
 	}
@@ -57,10 +63,8 @@ func (u *UnitOfWork) AllBookmarks(username string) ([]BookmarkItem, error) {
 }
 
 // CreateBookmark saves a new bookmark in the store
-func (u *UnitOfWork) CreateBookmark(item BookmarkItem) error {
-	if item.ItemID == "" {
-		item.ItemID = xid.New().String()
-	}
+func (u *UnitOfWork) CreateBookmark(item BookmarkItem) (*BookmarkItem, error) {
+	item.ItemID = xid.New().String()
 	var err error
 	tx := u.db.MustBegin()
 	if _, err = tx.NamedExec("INSERT INTO bookmark_items (item_id, path, display_name, url, sort_order, type, user_name, created) VALUES(:item_id,:path,:display_name,:url,:sort_order,:type,:user_name,:created)", &BookmarkItem{
@@ -74,14 +78,15 @@ func (u *UnitOfWork) CreateBookmark(item BookmarkItem) error {
 		Created:     int32(time.Now().Unix()),
 	}); err != nil {
 		if txErr := tx.Rollback(); txErr != nil {
-			return fmt.Errorf("could not rollback transaction: %v", txErr)
+			return nil, fmt.Errorf("could not rollback transaction: %v", txErr)
 		}
-		return fmt.Errorf("could not save bookmark: %v", err)
+		return nil, fmt.Errorf("could not save bookmark: %v", err)
 	}
 	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("could not commit transaction: %v", err)
+		return nil, fmt.Errorf("could not commit transaction: %v", err)
 	}
-	return err
+
+	return &item, err
 }
 
 // UpdateBookmark overwrites an existing bookmark
@@ -122,6 +127,9 @@ func (u *UnitOfWork) BookmarkByID(itemID, username string) (*BookmarkItem, error
 	if itemID == "" {
 		return nil, fmt.Errorf("cannot use an empty ID")
 	}
+	if username == "" {
+		return nil, fmt.Errorf("cannot use empty Username")
+	}
 	if err := u.db.Get(&item, "SELECT * FROM bookmark_items WHERE user_name=? AND item_id=?", username, itemID); err != nil {
 		return nil, fmt.Errorf("could not get bookmark by ID:'%s': %v", itemID, err)
 	}
@@ -135,7 +143,26 @@ func (u *UnitOfWork) BookmarkByPath(path, username string) ([]BookmarkItem, erro
 	if path == "" {
 		return nil, fmt.Errorf("cannot use an empty path")
 	}
+	if username == "" {
+		return nil, fmt.Errorf("cannot use empty Username")
+	}
 	if err := u.db.Select(&bookmarks, "SELECT * FROM bookmark_items WHERE user_name = ? AND path = ? ORDER BY sort_order ASC, display_name ASC", username, path); err != nil {
+		return nil, err
+	}
+	return bookmarks, nil
+}
+
+// BookmarkStartsByPath returns the bookmarks located in the given path
+// a path is similar to a filesystem path /a/b/c*
+func (u *UnitOfWork) BookmarkStartsByPath(path, username string) ([]BookmarkItem, error) {
+	var bookmarks []BookmarkItem
+	if path == "" {
+		return nil, fmt.Errorf("cannot use an empty path")
+	}
+	if username == "" {
+		return nil, fmt.Errorf("cannot use empty Username")
+	}
+	if err := u.db.Select(&bookmarks, "SELECT * FROM bookmark_items WHERE user_name = ? AND path LIKE ? ORDER BY sort_order ASC, display_name ASC", username, path+"%"); err != nil {
 		return nil, err
 	}
 	return bookmarks, nil
@@ -149,6 +176,9 @@ func (u *UnitOfWork) FolderByPathName(path, name, username string) (*BookmarkIte
 	}
 	if name == "" {
 		return nil, fmt.Errorf("cannot use an empty name")
+	}
+	if username == "" {
+		return nil, fmt.Errorf("cannot use empty Username")
 	}
 	if err := u.db.Get(&item, "SELECT * FROM bookmark_items WHERE user_name = ? AND path=? AND type=? AND display_name=?", username, path, Folder, name); err != nil {
 		return nil, fmt.Errorf("could not get bookmark Folder for path '%s' and name '%s': %v", path, name, err)
@@ -164,6 +194,84 @@ func (u *UnitOfWork) InitSchema(ddlFilePath string) error {
 	}
 	if _, err := u.db.Exec(string(c)); err != nil {
 		return fmt.Errorf("cannot created db schema from file '%s': %v", ddlFilePath, err)
+	}
+	return nil
+}
+
+// Delete removes a bookmark by the given itemID
+func (u *UnitOfWork) Delete(itemID, username string) error {
+	if itemID == "" {
+		return fmt.Errorf("cannot use empty ID")
+	}
+	if username == "" {
+		return fmt.Errorf("cannot use empty Username")
+	}
+	var err error
+	var r sql.Result
+	if r, err = u.db.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND item_id = ?", username, itemID); err != nil {
+		return fmt.Errorf("cannot delete bookmark with ID: %s; error: %v", itemID, err)
+	}
+	var c int64
+	c, err = r.RowsAffected()
+	if err != nil {
+		log.Printf("Could not delete item '%s': %v", itemID, err)
+		return fmt.Errorf("no items were deleted")
+	}
+	if c == 0 {
+		log.Printf("Could not delete item for ID '%s' and Username '%s'", itemID, username)
+		return fmt.Errorf("no items were deleted")
+	}
+	return nil
+}
+
+// DeletePath removes a whole path of items
+// it uses the given path and deletes the items which start with the given path
+// e.g. /a/b* -- deletes all items with path /a/b, /a/b/c, /a/b/....
+func (u *UnitOfWork) DeletePath(path, username string) error {
+	if path == "" {
+		return fmt.Errorf("cannot use an empty ID")
+	}
+	if path == "/" {
+		return fmt.Errorf("cannot delete the ROOT path '/'")
+	}
+	if username == "" {
+		return fmt.Errorf("cannot use empty Username")
+	}
+	var err error
+	var r sql.Result
+	if r, err = u.db.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND path LIKE ?", username, path+"%"); err != nil {
+		return fmt.Errorf("cannot delete items for path: '%s'; error: %v", path, err)
+	}
+	var c int64
+	c, err = r.RowsAffected()
+	if err != nil {
+		log.Printf("Could not delete items for path '%s': %v", path, err)
+		return fmt.Errorf("no items were deleted for path '%s'", path)
+	}
+	if c == 0 {
+		log.Printf("Could not delete item for path '%s' and Username '%s'", path, username)
+		return fmt.Errorf("no items were deleted for path '%s'", path)
+	}
+
+	// it is also necessary to delete the folder with the given name
+	// e.g. if the supplied path is /A/B then we need to delete /A/B*
+	// but also delete the item Path /A, DisplayName B, Type Folder
+	i := strings.LastIndex(path, "/")
+	if i == -1 {
+		return fmt.Errorf("not a valid path, no path seperator '/' found")
+	}
+	n := path[i+1:]
+	if r, err = u.db.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND display_name = ? AND type = ?", username, n, Folder); err != nil {
+		return fmt.Errorf("cannot delete item for path: '%s'; error: %v", n, err)
+	}
+	c, err = r.RowsAffected()
+	if err != nil {
+		log.Printf("Could not delete items for path '%s': %v", n, err)
+		return fmt.Errorf("no items were deleted for path '%s'", n)
+	}
+	if c == 0 {
+		log.Printf("Could not delete item for path '%s' and Username '%s'", n, username)
+		return fmt.Errorf("no items were deleted for path '%s'", n)
 	}
 	return nil
 }

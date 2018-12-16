@@ -3,6 +3,8 @@ package bookmarks
 import (
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/bihe/bookmarks/api"
 	"github.com/bihe/bookmarks/core"
@@ -56,7 +58,7 @@ func (app *BookmarkAPI) GetAll(w http.ResponseWriter, r *http.Request) {
 func (app *BookmarkAPI) GetByID(w http.ResponseWriter, r *http.Request) {
 	nodeID := chi.URLParam(r, "NodeID")
 	if nodeID == "" {
-		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("missing id to load bookmark")))
+		render.Render(w, r, api.ErrBadRequest(fmt.Errorf("missing id to load bookmark")))
 		return
 	}
 	var item *store.BookmarkItem
@@ -75,7 +77,7 @@ func (app *BookmarkAPI) FindByPath(w http.ResponseWriter, r *http.Request) {
 	var bookmarks []store.BookmarkItem
 	path := r.URL.Query().Get("path")
 	if path == "" {
-		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("no path supplied or missing query-param 'path'")))
+		render.Render(w, r, api.ErrBadRequest(fmt.Errorf("no path supplied or missing query-param 'path'")))
 		return
 	}
 	if bookmarks, err = app.uow.BookmarkByPath(path, user(r).Username); err != nil {
@@ -94,18 +96,18 @@ func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 	var bookmark *Bookmark
 	data := &BookmarkRequest{}
 	if err := render.Bind(r, data); err != nil {
-		render.Render(w, r, api.ErrInvalidRequest(err))
+		render.Render(w, r, api.ErrBadRequest(err))
 		return
 	}
 	bookmark = data.Bookmark
 	// validate the supplied bookmark data for mandatory fields, invalid chars, ...
 	if err := bookmark.Validate(); err != nil {
-		render.Render(w, r, api.ErrInvalidRequest(err))
+		render.Render(w, r, api.ErrBadRequest(err))
 		return
 	}
 	// check if the given folder-structure is available
 	if err := ValidatePath(bookmark.Path, dbFolderValidator{uow: app.uow, user: user(r).Username}); err != nil {
-		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("cannot create item because of missing folder structure: %v", err)))
+		render.Render(w, r, api.ErrBadRequest(fmt.Errorf("cannot create item because of missing folder structure: %v", err)))
 		return
 	}
 
@@ -123,7 +125,7 @@ func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 		url = ""
 	}
 
-	err := app.uow.CreateBookmark(store.BookmarkItem{
+	_, err := app.uow.CreateBookmark(store.BookmarkItem{
 		DisplayName: bookmark.DisplayName,
 		Path:        bookmark.Path,
 		URL:         url,
@@ -132,7 +134,7 @@ func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 		Username:    user(r).Username,
 	})
 	if err != nil {
-		render.Render(w, r, api.ErrInvalidRequest(err))
+		render.Render(w, r, api.ErrBadRequest(err))
 		return
 	}
 	render.Render(w, r, api.SuccessResult(http.StatusCreated, fmt.Sprintf("bookmark item created: p:%s, n:%s", bookmark.Path, bookmark.DisplayName)))
@@ -144,11 +146,11 @@ func (app *BookmarkAPI) Update(w http.ResponseWriter, r *http.Request) {
 	var bookmark *Bookmark
 	data := &BookmarkRequest{}
 	if err := render.Bind(r, data); err != nil {
-		render.Render(w, r, api.ErrInvalidRequest(err))
+		render.Render(w, r, api.ErrBadRequest(err))
 		return
 	}
 	if data.Bookmark.NodeID == "" {
-		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("cannot upate bookmark with empty ID")))
+		render.Render(w, r, api.ErrBadRequest(fmt.Errorf("cannot upate bookmark with empty ID")))
 		return
 	}
 	bookmark = data.Bookmark
@@ -159,12 +161,12 @@ func (app *BookmarkAPI) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	// validate the supplied bookmark data for mandatory fields, invalid chars, ...
 	if err := bookmark.Validate(); err != nil {
-		render.Render(w, r, api.ErrInvalidRequest(err))
+		render.Render(w, r, api.ErrBadRequest(err))
 		return
 	}
 	// check if the given folder-structure is available
 	if err := ValidatePath(bookmark.Path, dbFolderValidator{uow: app.uow, user: user(r).Username}); err != nil {
-		render.Render(w, r, api.ErrInvalidRequest(fmt.Errorf("cannot update item because of missing folder structure: %v", err)))
+		render.Render(w, r, api.ErrBadRequest(fmt.Errorf("cannot update item because of missing folder structure: %v", err)))
 		return
 	}
 	if bookmark.DisplayName == "" {
@@ -184,10 +186,73 @@ func (app *BookmarkAPI) Update(w http.ResponseWriter, r *http.Request) {
 		Username:    user(r).Username,
 	})
 	if err != nil {
-		render.Render(w, r, api.ErrInvalidRequest(err))
+		render.Render(w, r, api.ErrBadRequest(err))
 		return
 	}
 	render.Render(w, r, api.SuccessResult(http.StatusOK, fmt.Sprintf("bookmark item updated: %s/%s", bookmark.Path, bookmark.DisplayName)))
+}
+
+// Delete removes a given bookmark. It is necessary to provide a specific
+// item-ID as a path param :NodeId
+// If the item is a folder, and there are more items available 'within' this folder
+// an error is returned, indicating this situation
+// To forcefully delete the item nevertheless, the optional path param :Force can be applied (bool)
+func (app *BookmarkAPI) Delete(w http.ResponseWriter, r *http.Request) {
+	nodeID := chi.URLParam(r, "NodeID")
+	if nodeID == "" {
+		render.Render(w, r, api.ErrBadRequest(fmt.Errorf("missing id, cannot delete bookmark")))
+		return
+	}
+
+	var item *store.BookmarkItem
+	var err error
+	if item, err = app.uow.BookmarkByID(nodeID, user(r).Username); err != nil {
+		render.Render(w, r, api.ErrNotFound(err))
+		return
+	}
+	if item.Type == store.Node {
+		err := app.uow.Delete(nodeID, user(r).Username)
+		if err != nil {
+			render.Render(w, r, api.ErrBadRequest(err))
+			return
+		}
+		render.Render(w, r, api.SuccessResult(http.StatusOK, fmt.Sprintf("bookmark item was deleted: '%s'", nodeID)))
+		return
+	}
+
+	// for folders it needs to be checked, if there are 'children' within this folder
+	path := item.Path + "/" + item.DisplayName
+	if strings.HasSuffix(item.Path, "/") {
+		path = item.Path + item.DisplayName
+	}
+
+	var bookmarks []store.BookmarkItem
+	if bookmarks, err = app.uow.BookmarkStartsByPath(path, user(r).Username); err != nil {
+		render.Render(w, r, api.ErrServerError(err))
+		return
+	}
+	if len(bookmarks) == 0 {
+		// all is good, we can just delete the item
+		err := app.uow.Delete(nodeID, user(r).Username)
+		if err != nil {
+			render.Render(w, r, api.ErrBadRequest(err))
+			return
+		}
+		render.Render(w, r, api.SuccessResult(http.StatusOK, fmt.Sprintf("bookmark item was deleted: '%s'", nodeID)))
+		return
+	}
+	force, _ := strconv.ParseBool(chi.URLParam(r, "Force"))
+	if !force {
+		render.Render(w, r, api.ErrBadRequest(fmt.Errorf("cannot delete the item because of '%d' child elements", len(bookmarks))))
+		return
+	}
+	// force:True is supplied, so no matter what, we will delete the whole path
+	err = app.uow.DeletePath(path, user(r).Username)
+	if err != nil {
+		render.Render(w, r, api.ErrBadRequest(fmt.Errorf("cannot delete the item by force: %v", err)))
+		return
+	}
+	render.Render(w, r, api.SuccessResult(http.StatusOK, fmt.Sprintf("bookmark item was deleted: '%s'", nodeID)))
 }
 
 // --------------------------------------------------------------------------

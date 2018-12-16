@@ -120,7 +120,7 @@ func TestAPICreateBookmark(t *testing.T) {
 			}`,
 			jwt:      jwt,
 			status:   http.StatusBadRequest,
-			response: `{"status":400,"message":"invalid request: cannot create item because of missing folder structure: the folder with path '/' and name 'A' does not exist"}`,
+			response: `{"status":400,"message":"bad request: cannot create item because of missing folder structure: the folder with path '/' and name 'A' does not exist"}`,
 		},
 		{
 			name: "Invalid characters",
@@ -133,7 +133,7 @@ func TestAPICreateBookmark(t *testing.T) {
 			}`,
 			jwt:      jwt,
 			status:   http.StatusBadRequest,
-			response: `{"status":400,"message":"invalid request: invalid chars in 'DisplayName'"}`,
+			response: `{"status":400,"message":"bad request: invalid chars in 'DisplayName'"}`,
 		},
 		{
 			name: "Invalid path",
@@ -146,14 +146,14 @@ func TestAPICreateBookmark(t *testing.T) {
 			}`,
 			jwt:      jwt,
 			status:   http.StatusBadRequest,
-			response: `{"status":400,"message":"invalid request: a path cannot end with '/"}`,
+			response: `{"status":400,"message":"bad request: a path cannot end with '/"}`,
 		},
 		{
 			name:     "Wrong payload",
 			payload:  "",
 			jwt:      jwt,
 			status:   http.StatusBadRequest,
-			response: `{"status":400,"message":"invalid request: EOF"}`,
+			response: `{"status":400,"message":"bad request: EOF"}`,
 		},
 		{
 			name:     "No jwt auth token",

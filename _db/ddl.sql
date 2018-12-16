@@ -9,5 +9,5 @@ CREATE TABLE `bookmark_items` (
 	`created`	INTEGER NOT NULL DEFAULT 0,
 	`modified`	INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY(`item_id`),
-	UNIQUE(`path`, `display_name`) ON CONFLICT REPLACE
+	UNIQUE(`path`, `display_name`)
 );

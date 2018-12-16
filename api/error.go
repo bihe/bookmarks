@@ -29,11 +29,11 @@ func (e *ErrResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// ErrInvalidRequest returns a http.StatusBadRequest
-func ErrInvalidRequest(err error) render.Renderer {
+// ErrBadRequest returns a http.StatusBadRequest
+func ErrBadRequest(err error) render.Renderer {
 	return &ErrResponse{
 		HTTPStatusCode: http.StatusBadRequest,
-		Message:        fmt.Sprintf("invalid request: %s", err),
+		Message:        fmt.Sprintf("bad request: %s", err),
 	}
 }
 
@@ -42,5 +42,13 @@ func ErrNotFound(err error) render.Renderer {
 	return &ErrResponse{
 		HTTPStatusCode: http.StatusNotFound,
 		Message:        fmt.Sprintf("cannot find item: %v", err),
+	}
+}
+
+// ErrServerError returns a http.StatusInternalServerError
+func ErrServerError(err error) render.Renderer {
+	return &ErrResponse{
+		HTTPStatusCode: http.StatusInternalServerError,
+		Message:        fmt.Sprintf("could not service the request: %v", err),
 	}
 }
