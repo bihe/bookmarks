@@ -108,6 +108,15 @@ func TestDBBookmarks(t *testing.T) {
 		t.Errorf("1 bookmarks should be returned by path /path, got %d", len(blist))
 	}
 
+	// search for bookmarks
+	blist, err = uow.BookmarkByName("a", "A")
+	if err != nil {
+		t.Errorf("cannot get bookmark by name 'a': %v", err)
+	}
+	if len(blist) != 1 {
+		t.Errorf("1 bookmarks should be returned by name 'a', got %d", len(blist))
+	}
+
 	// create a bookmark 'Folder'
 	_, err = uow.CreateBookmark(store.BookmarkItem{
 		DisplayName: "a",

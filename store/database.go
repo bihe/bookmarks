@@ -186,6 +186,21 @@ func (u *UnitOfWork) FolderByPathName(path, name, username string) (*BookmarkIte
 	return &item, nil
 }
 
+// BookmarkByName returns all bookmarks matching the given name
+func (u *UnitOfWork) BookmarkByName(name, username string) ([]BookmarkItem, error) {
+	var bookmarks []BookmarkItem
+	if name == "" {
+		return nil, fmt.Errorf("cannot use an empty name")
+	}
+	if username == "" {
+		return nil, fmt.Errorf("cannot use empty Username")
+	}
+	if err := u.db.Select(&bookmarks, "SELECT * FROM bookmark_items WHERE user_name = ? AND lower(display_name) LIKE ? ORDER BY sort_order ASC, display_name ASC", username, "%"+strings.ToLower(name)+"%"); err != nil {
+		return nil, err
+	}
+	return bookmarks, nil
+}
+
 // InitSchema sets the sqlite database schema
 func (u *UnitOfWork) InitSchema(ddlFilePath string) error {
 	c, err := ioutil.ReadFile(ddlFilePath)

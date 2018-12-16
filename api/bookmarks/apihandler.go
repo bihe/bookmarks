@@ -87,6 +87,22 @@ func (app *BookmarkAPI) FindByPath(w http.ResponseWriter, r *http.Request) {
 	render.Render(w, r, NewBookmarkListResponse(mapBookmarks(bookmarks)))
 }
 
+// FindByName search the bookmark items for an element with the given name
+func (app *BookmarkAPI) FindByName(w http.ResponseWriter, r *http.Request) {
+	var err error
+	var bookmarks []store.BookmarkItem
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		render.Render(w, r, api.ErrBadRequest(fmt.Errorf("no name supplied or missing query-param 'name'")))
+		return
+	}
+	if bookmarks, err = app.uow.BookmarkByName(name, user(r).Username); err != nil {
+		render.Render(w, r, api.ErrNotFound(err))
+		return
+	}
+	render.Render(w, r, NewBookmarkListResponse(mapBookmarks(bookmarks)))
+}
+
 // Create will save a new bookmark entry
 // the bookmark entry has a given type. If the type is Folder, the URL is just ignored and not saved
 // if a bookmark is created with a given path, the method first checks if the path is available.

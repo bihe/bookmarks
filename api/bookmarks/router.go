@@ -89,6 +89,7 @@ func setupAPI(config core.Configuration, ddlFilePath string) *chi.Mux {
 			r.Get("/path", b.FindByPath)
 			r.Delete("/{NodeID}", b.Delete)
 			r.Delete("/{NodeID}/{Force}", b.Delete)
+			r.Get("/search", b.FindByName)
 		})
 	})
 	return r
