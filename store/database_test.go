@@ -1,6 +1,8 @@
 package store_test
 
 import (
+	"io/ioutil"
+	"os"
 	"path"
 	"path/filepath"
 	"testing"
@@ -9,21 +11,25 @@ import (
 )
 
 const dbDialect = "sqlite3"
-const connStr = ":memory:"
 
-func setupDB() *store.UnitOfWork {
+func setupDB() (*store.UnitOfWork, string) {
 	dir, err := filepath.Abs("../")
 	if err != nil {
 		panic("Cannot read ddl.sql")
 	}
 	p := path.Join(dir, "_db/", "ddl.sql")
-	uow := store.NewUnitOfWork(dbDialect, connStr)
+	tmpfile, err := ioutil.TempFile("", "bookmarks.sqlite")
+	if err != nil {
+		panic("Cannot create tempfile!")
+	}
+	uow := store.NewUnitOfWork(dbDialect, tmpfile.Name())
 	uow.InitSchema(p)
-	return uow
+	return uow, tmpfile.Name()
 }
 
 func TestDBBookmarks(t *testing.T) {
-	uow := setupDB()
+	uow, tmpFile := setupDB()
+	defer os.Remove(tmpFile) // clean up
 	r, err := uow.CreateBookmark(store.BookmarkItem{
 		DisplayName: "a",
 		Path:        "/",

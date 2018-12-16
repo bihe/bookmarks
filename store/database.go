@@ -222,19 +222,36 @@ func (u *UnitOfWork) Delete(itemID, username string) error {
 		return fmt.Errorf("cannot use empty Username")
 	}
 	var err error
+	tx := u.db.MustBegin()
 	var r sql.Result
 	if r, err = u.db.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND item_id = ?", username, itemID); err != nil {
+		if err = tx.Rollback(); err != nil {
+			return fmt.Errorf("could not rollback transaction: %v", err)
+		}
 		return fmt.Errorf("cannot delete bookmark with ID: %s; error: %v", itemID, err)
 	}
+
 	var c int64
 	c, err = r.RowsAffected()
 	if err != nil {
+		if err = tx.Rollback(); err != nil {
+			return fmt.Errorf("could not rollback transaction: %v", err)
+		}
+
 		log.Printf("Could not delete item '%s': %v", itemID, err)
 		return fmt.Errorf("no items were deleted")
 	}
 	if c == 0 {
+		if err = tx.Rollback(); err != nil {
+			return fmt.Errorf("could not rollback transaction: %v", err)
+		}
+
 		log.Printf("Could not delete item for ID '%s' and Username '%s'", itemID, username)
 		return fmt.Errorf("no items were deleted")
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("could not commit transaction: %v", err)
 	}
 	return nil
 }
@@ -253,17 +270,30 @@ func (u *UnitOfWork) DeletePath(path, username string) error {
 		return fmt.Errorf("cannot use empty Username")
 	}
 	var err error
+	tx := u.db.MustBegin()
 	var r sql.Result
 	if r, err = u.db.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND path LIKE ?", username, path+"%"); err != nil {
+		if err = tx.Rollback(); err != nil {
+			return fmt.Errorf("could not rollback transaction: %v", err)
+		}
 		return fmt.Errorf("cannot delete items for path: '%s'; error: %v", path, err)
 	}
+
 	var c int64
 	c, err = r.RowsAffected()
 	if err != nil {
+		if err = tx.Rollback(); err != nil {
+			return fmt.Errorf("could not rollback transaction: %v", err)
+		}
+
 		log.Printf("Could not delete items for path '%s': %v", path, err)
 		return fmt.Errorf("no items were deleted for path '%s'", path)
 	}
 	if c == 0 {
+		if err = tx.Rollback(); err != nil {
+			return fmt.Errorf("could not rollback transaction: %v", err)
+		}
+
 		log.Printf("Could not delete item for path '%s' and Username '%s'", path, username)
 		return fmt.Errorf("no items were deleted for path '%s'", path)
 	}
@@ -273,20 +303,40 @@ func (u *UnitOfWork) DeletePath(path, username string) error {
 	// but also delete the item Path /A, DisplayName B, Type Folder
 	i := strings.LastIndex(path, "/")
 	if i == -1 {
+		if err = tx.Rollback(); err != nil {
+			return fmt.Errorf("could not rollback transaction: %v", err)
+		}
 		return fmt.Errorf("not a valid path, no path seperator '/' found")
 	}
 	n := path[i+1:]
 	if r, err = u.db.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND display_name = ? AND type = ?", username, n, Folder); err != nil {
+		if err = tx.Rollback(); err != nil {
+			return fmt.Errorf("could not rollback transaction: %v", err)
+		}
+
 		return fmt.Errorf("cannot delete item for path: '%s'; error: %v", n, err)
 	}
+
 	c, err = r.RowsAffected()
 	if err != nil {
+		if err = tx.Rollback(); err != nil {
+			return fmt.Errorf("could not rollback transaction: %v", err)
+		}
+
 		log.Printf("Could not delete items for path '%s': %v", n, err)
 		return fmt.Errorf("no items were deleted for path '%s'", n)
 	}
 	if c == 0 {
+		if err = tx.Rollback(); err != nil {
+			return fmt.Errorf("could not rollback transaction: %v", err)
+		}
+
 		log.Printf("Could not delete item for path '%s' and Username '%s'", n, username)
 		return fmt.Errorf("no items were deleted for path '%s'", n)
 	}
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("could not commit transaction: %v", err)
+	}
+
 	return nil
 }
