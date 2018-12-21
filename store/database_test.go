@@ -17,7 +17,7 @@ func setupDB() *store.UnitOfWork {
 		panic("Cannot read ddl.sql")
 	}
 	p := path.Join(dir, "_db/", "ddl.sql")
-	uow := store.NewUnitOfWork(dbDialect, dbConnStr)
+	uow := store.New(dbDialect, dbConnStr)
 	uow.InitSchema(p)
 	return uow
 }

@@ -74,7 +74,7 @@ func setupAPI(config core.Configuration, ddlFilePath string) *chi.Mux {
 			},
 		}
 		r.Use(j.JWTContext)
-		uow := store.NewUnitOfWork(config.DB.Dialect, config.DB.Connection)
+		uow := store.New(config.DB.Dialect, config.DB.Connection)
 		if ddlFilePath != "" {
 			uow.InitSchema(ddlFilePath)
 		}

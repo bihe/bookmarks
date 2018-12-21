@@ -20,9 +20,9 @@ type UnitOfWork struct {
 	db *sqlx.DB
 }
 
-// NewUnitOfWork create a new instance of the database interaction logic
+// New create a new instance of the database interaction logic
 // by setting up the datbase
-func NewUnitOfWork(dbdialect, connstr string) *UnitOfWork {
+func New(dbdialect, connstr string) *UnitOfWork {
 	db := sqlx.MustConnect(dbdialect, connstr)
 	return &UnitOfWork{db: db}
 }
