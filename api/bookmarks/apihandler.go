@@ -15,26 +15,6 @@ import (
 )
 
 // --------------------------------------------------------------------------
-// validate a given path by checking if the folder-structure is avail in DB
-// --------------------------------------------------------------------------
-
-// dbFolderValidator checks for the existence of a 'Folder' item with the
-// given 'name' in the given 'path'
-type dbFolderValidator struct {
-	uow  *store.UnitOfWork
-	user string
-}
-
-func (d dbFolderValidator) Exists(path, name string) bool {
-	_, err := d.uow.FolderByPathName(path, name, d.user)
-	if err != nil {
-		return false
-	}
-	return true
-
-}
-
-// --------------------------------------------------------------------------
 // Bookmark API
 // --------------------------------------------------------------------------
 
@@ -272,7 +252,27 @@ func (app *BookmarkAPI) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // --------------------------------------------------------------------------
-// internal helpers
+// validate a given path by checking if the folder-structure is avail in DB
+// --------------------------------------------------------------------------
+
+// dbFolderValidator checks for the existence of a 'Folder' item with the
+// given 'name' in the given 'path'
+type dbFolderValidator struct {
+	uow  *store.UnitOfWork
+	user string
+}
+
+func (d dbFolderValidator) Exists(path, name string) bool {
+	_, err := d.uow.FolderByPathName(path, name, d.user)
+	if err != nil {
+		return false
+	}
+	return true
+
+}
+
+// --------------------------------------------------------------------------
+// internal
 // --------------------------------------------------------------------------
 
 func mapBookmark(item store.BookmarkItem) Bookmark {

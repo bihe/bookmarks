@@ -50,9 +50,9 @@ type BookmarkItem struct {
 	Modified    int32    `db:"modified"`
 }
 
-/****************************************************************************
-* READ METHODS                                                              *
-****************************************************************************/
+// --------------------------------------------------------------------------
+// READ METHODS
+// --------------------------------------------------------------------------
 
 // AllBookmarks returns all available bookmarks
 func (u *UnitOfWork) AllBookmarks(username string) ([]BookmarkItem, error) {
@@ -146,9 +146,9 @@ func (u *UnitOfWork) BookmarkByName(name, username string) ([]BookmarkItem, erro
 	return bookmarks, nil
 }
 
-/****************************************************************************
-* TRANSACTIONAL METHODS                                                     *
-****************************************************************************/
+// --------------------------------------------------------------------------
+// TRANSACTIONAL METHODS
+// --------------------------------------------------------------------------
 
 // CreateBookmark saves a new bookmark in the store
 func (u *UnitOfWork) CreateBookmark(item BookmarkItem) (bItem *BookmarkItem, err error) {
@@ -333,9 +333,9 @@ func (u *UnitOfWork) DeletePath(path, username string) (err error) {
 	return nil
 }
 
-/****************************************************************************
-* HELPER METHODS                                                            *
-****************************************************************************/
+// --------------------------------------------------------------------------
+// HELPER METHODS
+// --------------------------------------------------------------------------
 
 // InitSchema sets the sqlite database schema
 func (u *UnitOfWork) InitSchema(ddlFilePath string) error {
