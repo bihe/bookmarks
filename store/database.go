@@ -50,6 +50,10 @@ type BookmarkItem struct {
 	Modified    int32    `db:"modified"`
 }
 
+/****************************************************************************
+* READ METHODS                                                              *
+****************************************************************************/
+
 // AllBookmarks returns all available bookmarks
 func (u *UnitOfWork) AllBookmarks(username string) ([]BookmarkItem, error) {
 	var bookmarks []BookmarkItem
@@ -60,65 +64,6 @@ func (u *UnitOfWork) AllBookmarks(username string) ([]BookmarkItem, error) {
 		return nil, err
 	}
 	return bookmarks, nil
-}
-
-// CreateBookmark saves a new bookmark in the store
-func (u *UnitOfWork) CreateBookmark(item BookmarkItem) (*BookmarkItem, error) {
-	item.ItemID = xid.New().String()
-	var err error
-	tx := u.db.MustBegin()
-	if _, err = tx.NamedExec("INSERT INTO bookmark_items (item_id, path, display_name, url, sort_order, type, user_name, created) VALUES(:item_id,:path,:display_name,:url,:sort_order,:type,:user_name,:created)", &BookmarkItem{
-		ItemID:      item.ItemID,
-		DisplayName: item.DisplayName,
-		Path:        item.Path,
-		URL:         item.URL,
-		SortOrder:   item.SortOrder,
-		Type:        item.Type,
-		Username:    item.Username,
-		Created:     int32(time.Now().Unix()),
-	}); err != nil {
-		if txErr := tx.Rollback(); txErr != nil {
-			return nil, fmt.Errorf("could not rollback transaction: %v", txErr)
-		}
-		return nil, fmt.Errorf("could not save bookmark: %v", err)
-	}
-	if err = tx.Commit(); err != nil {
-		return nil, fmt.Errorf("could not commit transaction: %v", err)
-	}
-
-	return &item, err
-}
-
-// UpdateBookmark overwrites an existing bookmark
-func (u *UnitOfWork) UpdateBookmark(item BookmarkItem) error {
-	if item.ItemID == "" {
-		return fmt.Errorf("no ID for bookmark provided, cannot update")
-	}
-	var err error
-	_, err = u.BookmarkByID(item.ItemID, item.Username)
-	if err != nil {
-		return err
-	}
-	tx := u.db.MustBegin()
-	// we will not change the item-type of an existing item - turn a bookmark into a folder? makes no sense
-	if _, err = tx.NamedExec("UPDATE bookmark_items SET path=:path,display_name=:display_name,url=:url,sort_order=:sort_order,modified=:modified WHERE item_id=:item_id AND user_name=:user_name", &BookmarkItem{
-		ItemID:      item.ItemID,
-		Username:    item.Username,
-		DisplayName: item.DisplayName,
-		Path:        item.Path,
-		URL:         item.URL,
-		SortOrder:   item.SortOrder,
-		Modified:    int32(time.Now().Unix()),
-	}); err != nil {
-		if err = tx.Rollback(); err != nil {
-			return fmt.Errorf("could not rollback transaction: %v", err)
-		}
-		return fmt.Errorf("could not update bookmark: %v", err)
-	}
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("could not commit transaction: %v", err)
-	}
-	return err
 }
 
 // BookmarkByID queries the item by the given itemID
@@ -201,57 +146,118 @@ func (u *UnitOfWork) BookmarkByName(name, username string) ([]BookmarkItem, erro
 	return bookmarks, nil
 }
 
-// InitSchema sets the sqlite database schema
-func (u *UnitOfWork) InitSchema(ddlFilePath string) error {
-	c, err := ioutil.ReadFile(ddlFilePath)
+/****************************************************************************
+* TRANSACTIONAL METHODS                                                     *
+****************************************************************************/
+
+// CreateBookmark saves a new bookmark in the store
+func (u *UnitOfWork) CreateBookmark(item BookmarkItem) (bItem *BookmarkItem, err error) {
+	item.ItemID = xid.New().String()
+	tx := u.db.MustBegin()
+	defer func() {
+		switch err {
+		case nil:
+			err = tx.Commit()
+		default:
+			log.Printf("could not complete the transaction: %v", err)
+			if e := tx.Rollback(); e != nil {
+				err = fmt.Errorf("%v; could not rollback transaction: %v", err, e)
+			}
+		}
+	}()
+
+	if _, err = tx.NamedExec("INSERT INTO bookmark_items (item_id, path, display_name, url, sort_order, type, user_name, created) VALUES(:item_id,:path,:display_name,:url,:sort_order,:type,:user_name,:created)", &BookmarkItem{
+		ItemID:      item.ItemID,
+		DisplayName: item.DisplayName,
+		Path:        item.Path,
+		URL:         item.URL,
+		SortOrder:   item.SortOrder,
+		Type:        item.Type,
+		Username:    item.Username,
+		Created:     int32(time.Now().Unix()),
+	}); err != nil {
+		err = fmt.Errorf("could not save bookmark: %v", err)
+		bItem = nil
+		return
+	}
+	return &item, err
+}
+
+// UpdateBookmark overwrites an existing bookmark
+func (u *UnitOfWork) UpdateBookmark(item BookmarkItem) (err error) {
+	if item.ItemID == "" {
+		return fmt.Errorf("no ID for bookmark provided, cannot update")
+	}
+	_, err = u.BookmarkByID(item.ItemID, item.Username)
 	if err != nil {
-		return fmt.Errorf("could not read ddl.sql file: %v", err)
+		return err
 	}
-	if _, err := u.db.Exec(string(c)); err != nil {
-		return fmt.Errorf("cannot created db schema from file '%s': %v", ddlFilePath, err)
+	tx := u.db.MustBegin()
+	defer func() {
+		switch err {
+		case nil:
+			err = tx.Commit()
+		default:
+			log.Printf("could not complete the transaction: %v", err)
+			if e := tx.Rollback(); e != nil {
+				err = fmt.Errorf("%v; could not rollback transaction: %v", err, e)
+			}
+		}
+	}()
+
+	// we will not change the item-type of an existing item - turn a bookmark into a folder? makes no sense
+	if _, err = tx.NamedExec("UPDATE bookmark_items SET path=:path,display_name=:display_name,url=:url,sort_order=:sort_order,modified=:modified WHERE item_id=:item_id AND user_name=:user_name", &BookmarkItem{
+		ItemID:      item.ItemID,
+		Username:    item.Username,
+		DisplayName: item.DisplayName,
+		Path:        item.Path,
+		URL:         item.URL,
+		SortOrder:   item.SortOrder,
+		Modified:    int32(time.Now().Unix()),
+	}); err != nil {
+		err = fmt.Errorf("could not update bookmark: %v", err)
+		return
 	}
-	return nil
+	return err
 }
 
 // Delete removes a bookmark by the given itemID
-func (u *UnitOfWork) Delete(itemID, username string) error {
+func (u *UnitOfWork) Delete(itemID, username string) (err error) {
 	if itemID == "" {
 		return fmt.Errorf("cannot use empty ID")
 	}
 	if username == "" {
 		return fmt.Errorf("cannot use empty Username")
 	}
-	var err error
 	tx := u.db.MustBegin()
-	var r sql.Result
-	if r, err = u.db.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND item_id = ?", username, itemID); err != nil {
-		if err = tx.Rollback(); err != nil {
-			return fmt.Errorf("could not rollback transaction: %v", err)
+	defer func() {
+		switch err {
+		case nil:
+			err = tx.Commit()
+		default:
+			log.Printf("could not complete the transaction: %v", err)
+			if e := tx.Rollback(); e != nil {
+				err = fmt.Errorf("%v; could not rollback transaction: %v", err, e)
+			}
 		}
-		return fmt.Errorf("cannot delete bookmark with ID: %s; error: %v", itemID, err)
-	}
+	}()
 
+	var r sql.Result
+	if r, err = tx.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND item_id = ?", username, itemID); err != nil {
+		err = fmt.Errorf("cannot delete bookmark with ID: %s; error: %v", itemID, err)
+		return
+	}
 	var c int64
 	c, err = r.RowsAffected()
 	if err != nil {
-		if err = tx.Rollback(); err != nil {
-			return fmt.Errorf("could not rollback transaction: %v", err)
-		}
-
 		log.Printf("Could not delete item '%s': %v", itemID, err)
-		return fmt.Errorf("no items were deleted")
+		err = fmt.Errorf("no items were deleted: %v", err)
+		return
 	}
 	if c == 0 {
-		if err = tx.Rollback(); err != nil {
-			return fmt.Errorf("could not rollback transaction: %v", err)
-		}
-
 		log.Printf("Could not delete item for ID '%s' and Username '%s'", itemID, username)
-		return fmt.Errorf("no items were deleted")
-	}
-
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("could not commit transaction: %v", err)
+		err = fmt.Errorf("no items were deleted")
+		return
 	}
 	return nil
 }
@@ -259,7 +265,7 @@ func (u *UnitOfWork) Delete(itemID, username string) error {
 // DeletePath removes a whole path of items
 // it uses the given path and deletes the items which start with the given path
 // e.g. /a/b* -- deletes all items with path /a/b, /a/b/c, /a/b/....
-func (u *UnitOfWork) DeletePath(path, username string) error {
+func (u *UnitOfWork) DeletePath(path, username string) (err error) {
 	if path == "" {
 		return fmt.Errorf("cannot use an empty ID")
 	}
@@ -269,33 +275,35 @@ func (u *UnitOfWork) DeletePath(path, username string) error {
 	if username == "" {
 		return fmt.Errorf("cannot use empty Username")
 	}
-	var err error
+
 	tx := u.db.MustBegin()
-	var r sql.Result
-	if r, err = u.db.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND path LIKE ?", username, path+"%"); err != nil {
-		if err = tx.Rollback(); err != nil {
-			return fmt.Errorf("could not rollback transaction: %v", err)
+	defer func() {
+		switch err {
+		case nil:
+			err = tx.Commit()
+		default:
+			log.Printf("could not complete the transaction: %v", err)
+			if e := tx.Rollback(); e != nil {
+				err = fmt.Errorf("%v; could not rollback transaction: %v", err, e)
+			}
 		}
-		return fmt.Errorf("cannot delete items for path: '%s'; error: %v", path, err)
+	}()
+
+	var r sql.Result
+	if r, err = tx.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND path LIKE ?", username, path+"%"); err != nil {
+		err = fmt.Errorf("cannot delete items for path: '%s'; error: %v", path, err)
+		return
 	}
 
 	var c int64
 	c, err = r.RowsAffected()
 	if err != nil {
-		if err = tx.Rollback(); err != nil {
-			return fmt.Errorf("could not rollback transaction: %v", err)
-		}
-
-		log.Printf("Could not delete items for path '%s': %v", path, err)
-		return fmt.Errorf("no items were deleted for path '%s'", path)
+		err = fmt.Errorf("no items were deleted for path '%s': %v", path, err)
+		return
 	}
 	if c == 0 {
-		if err = tx.Rollback(); err != nil {
-			return fmt.Errorf("could not rollback transaction: %v", err)
-		}
-
-		log.Printf("Could not delete item for path '%s' and Username '%s'", path, username)
-		return fmt.Errorf("no items were deleted for path '%s'", path)
+		err = fmt.Errorf("could not delete item for path '%s' and Username '%s'", path, username)
+		return
 	}
 
 	// it is also necessary to delete the folder with the given name
@@ -303,40 +311,40 @@ func (u *UnitOfWork) DeletePath(path, username string) error {
 	// but also delete the item Path /A, DisplayName B, Type Folder
 	i := strings.LastIndex(path, "/")
 	if i == -1 {
-		if err = tx.Rollback(); err != nil {
-			return fmt.Errorf("could not rollback transaction: %v", err)
-		}
-		return fmt.Errorf("not a valid path, no path seperator '/' found")
+		err = fmt.Errorf("not a valid path, no path seperator '/' found")
+		return
 	}
 	n := path[i+1:]
-	if r, err = u.db.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND display_name = ? AND type = ?", username, n, Folder); err != nil {
-		if err = tx.Rollback(); err != nil {
-			return fmt.Errorf("could not rollback transaction: %v", err)
-		}
-
-		return fmt.Errorf("cannot delete item for path: '%s'; error: %v", n, err)
+	if r, err = tx.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND display_name = ? AND type = ?", username, n, Folder); err != nil {
+		err = fmt.Errorf("cannot delete item for path: '%s'; error: %v", n, err)
+		return
 	}
 
 	c, err = r.RowsAffected()
 	if err != nil {
-		if err = tx.Rollback(); err != nil {
-			return fmt.Errorf("could not rollback transaction: %v", err)
-		}
-
-		log.Printf("Could not delete items for path '%s': %v", n, err)
-		return fmt.Errorf("no items were deleted for path '%s'", n)
+		err = fmt.Errorf("cannot delete items for path '%s': %v", n, err)
+		return
 	}
 	if c == 0 {
-		if err = tx.Rollback(); err != nil {
-			return fmt.Errorf("could not rollback transaction: %v", err)
-		}
-
 		log.Printf("Could not delete item for path '%s' and Username '%s'", n, username)
-		return fmt.Errorf("no items were deleted for path '%s'", n)
+		err = fmt.Errorf("could not delete item for path '%s' and Username '%s'", n, username)
+		return
 	}
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("could not commit transaction: %v", err)
-	}
+	return nil
+}
 
+/****************************************************************************
+* HELPER METHODS                                                            *
+****************************************************************************/
+
+// InitSchema sets the sqlite database schema
+func (u *UnitOfWork) InitSchema(ddlFilePath string) error {
+	c, err := ioutil.ReadFile(ddlFilePath)
+	if err != nil {
+		return fmt.Errorf("could not read ddl.sql file: %v", err)
+	}
+	if _, err := u.db.Exec(string(c)); err != nil {
+		return fmt.Errorf("cannot created db schema from file '%s': %v", ddlFilePath, err)
+	}
 	return nil
 }

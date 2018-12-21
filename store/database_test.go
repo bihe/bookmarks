@@ -1,8 +1,6 @@
 package store_test
 
 import (
-	"io/ioutil"
-	"os"
 	"path"
 	"path/filepath"
 	"testing"
@@ -11,25 +9,21 @@ import (
 )
 
 const dbDialect = "sqlite3"
+const dbConnStr = ":memory:"
 
-func setupDB() (*store.UnitOfWork, string) {
+func setupDB() *store.UnitOfWork {
 	dir, err := filepath.Abs("../")
 	if err != nil {
 		panic("Cannot read ddl.sql")
 	}
 	p := path.Join(dir, "_db/", "ddl.sql")
-	tmpfile, err := ioutil.TempFile("", "bookmarks.sqlite")
-	if err != nil {
-		panic("Cannot create tempfile!")
-	}
-	uow := store.NewUnitOfWork(dbDialect, tmpfile.Name())
+	uow := store.NewUnitOfWork(dbDialect, dbConnStr)
 	uow.InitSchema(p)
-	return uow, tmpfile.Name()
+	return uow
 }
 
 func TestDBBookmarks(t *testing.T) {
-	uow, tmpFile := setupDB()
-	defer os.Remove(tmpFile) // clean up
+	uow := setupDB()
 	r, err := uow.CreateBookmark(store.BookmarkItem{
 		DisplayName: "a",
 		Path:        "/",
@@ -38,14 +32,14 @@ func TestDBBookmarks(t *testing.T) {
 		Username:    "A",
 	})
 	if err != nil {
-		t.Errorf("cannot create bookmark item: %v", err)
+		t.Fatalf("cannot create bookmark item: %v", err)
 	}
 	bookmarks, err := uow.AllBookmarks("A")
 	if err != nil {
-		t.Errorf("cannot get bookmarks: %v", err)
+		t.Fatalf("cannot get bookmarks: %v", err)
 	}
 	if len(bookmarks) < 1 {
-		t.Errorf("no bookmarks returned")
+		t.Fatalf("no bookmarks returned")
 	}
 
 	// create a bookmark with same path/displayname
@@ -58,7 +52,7 @@ func TestDBBookmarks(t *testing.T) {
 		Username:    "A",
 	})
 	if err == nil {
-		t.Errorf("unique constraint for path/displayname")
+		t.Fatalf("unique constraint for path/displayname")
 	}
 
 	// update a given bookmark
@@ -71,17 +65,17 @@ func TestDBBookmarks(t *testing.T) {
 		Username:    "A",
 	})
 	if err != nil {
-		t.Errorf("cannot update bookmark: %v", err)
+		t.Fatalf("cannot update bookmark: %v", err)
 	}
 
 	// verify the update
 	var b *store.BookmarkItem
 	b, err = uow.BookmarkByID(r.ItemID, "A")
 	if err != nil {
-		t.Errorf("cannot get bookmark by id: %v", err)
+		t.Fatalf("cannot get bookmark by id: %v", err)
 	}
 	if b.DisplayName != "a UPDATE" {
-		t.Errorf("the update of the bookmark did not work!")
+		t.Fatalf("the update of the bookmark did not work!")
 	}
 
 	// create another bookmark
@@ -93,34 +87,34 @@ func TestDBBookmarks(t *testing.T) {
 		Username:    "A",
 	})
 	if err != nil {
-		t.Errorf("cannot create bookmark item: %v", err)
+		t.Fatalf("cannot create bookmark item: %v", err)
 	}
 
 	// get bookmarks by path
 	var blist []store.BookmarkItem
 	blist, err = uow.BookmarkByPath("/", "A")
 	if err != nil {
-		t.Errorf("cannot get bookmark by path /: %v", err)
+		t.Fatalf("cannot get bookmark by path /: %v", err)
 	}
 	if len(blist) != 1 {
-		t.Errorf("1 bookmarks should be returned by path /, got %d", len(blist))
+		t.Fatalf("1 bookmarks should be returned by path /, got %d", len(blist))
 	}
 
 	blist, err = uow.BookmarkByPath("/path", "A")
 	if err != nil {
-		t.Errorf("cannot get bookmark by path /path: %v", err)
+		t.Fatalf("cannot get bookmark by path /path: %v", err)
 	}
 	if len(blist) != 1 {
-		t.Errorf("1 bookmarks should be returned by path /path, got %d", len(blist))
+		t.Fatalf("1 bookmarks should be returned by path /path, got %d", len(blist))
 	}
 
 	// search for bookmarks
 	blist, err = uow.BookmarkByName("a", "A")
 	if err != nil {
-		t.Errorf("cannot get bookmark by name 'a': %v", err)
+		t.Fatalf("cannot get bookmark by name 'a': %v", err)
 	}
 	if len(blist) != 1 {
-		t.Errorf("1 bookmarks should be returned by name 'a', got %d", len(blist))
+		t.Fatalf("1 bookmarks should be returned by name 'a', got %d", len(blist))
 	}
 
 	// create a bookmark 'Folder'
@@ -132,14 +126,14 @@ func TestDBBookmarks(t *testing.T) {
 		Username:    "A",
 	})
 	if err != nil {
-		t.Errorf("could not create a folder: %v", err)
+		t.Fatalf("could not create a folder: %v", err)
 	}
 	b, err = uow.FolderByPathName("/", "a", "A")
 	if err != nil {
-		t.Errorf("could not find the given folder %s: %v", "/a", err)
+		t.Fatalf("could not find the given folder %s: %v", "/a", err)
 	}
 	if b.Type != store.Folder {
-		t.Errorf("invalid bookmark type returned. expected %d, got %d", store.Folder, b.Type)
+		t.Fatalf("invalid bookmark type returned. expected %d, got %d", store.Folder, b.Type)
 	}
 
 	// create another bookmark
@@ -151,17 +145,17 @@ func TestDBBookmarks(t *testing.T) {
 		Username:    "A",
 	})
 	if err != nil {
-		t.Errorf("cannot create bookmark item: %v", err)
+		t.Fatalf("cannot create bookmark item: %v", err)
 	}
 
 	err = uow.Delete(r.ItemID, "B")
 	if err == nil {
-		t.Errorf("user 'B' should not be allowed to delete item")
+		t.Fatalf("user 'B' should not be allowed to delete item")
 	}
 
 	err = uow.Delete(r.ItemID, "A")
 	if err != nil {
-		t.Errorf("cannot delete a bookmark item: %v", err)
+		t.Fatalf("cannot delete a bookmark item: %v", err)
 	}
 
 	// create a hierarchy
@@ -172,7 +166,7 @@ func TestDBBookmarks(t *testing.T) {
 		Username:    "A",
 	})
 	if err != nil {
-		t.Errorf("cannot create bookmark folder: %v", err)
+		t.Fatalf("cannot create bookmark folder: %v", err)
 	}
 	r, err = uow.CreateBookmark(store.BookmarkItem{
 		DisplayName: "FOLDER2",
@@ -181,7 +175,7 @@ func TestDBBookmarks(t *testing.T) {
 		Username:    "A",
 	})
 	if err != nil {
-		t.Errorf("cannot create bookmark folder: %v", err)
+		t.Fatalf("cannot create bookmark folder: %v", err)
 	}
 	r, err = uow.CreateBookmark(store.BookmarkItem{
 		DisplayName: "Item1",
@@ -193,34 +187,34 @@ func TestDBBookmarks(t *testing.T) {
 
 	blist, err = uow.BookmarkByPath("/FOLDER1/FOLDER2", "A")
 	if err != nil {
-		t.Errorf("could not find the given folder %s: %v", "/a", err)
+		t.Fatalf("could not find the given folder %s: %v", "/a", err)
 	}
 	if len(blist) != 1 {
-		t.Errorf("the result should by 1, got %d", len(blist))
+		t.Fatalf("the result should by 1, got %d", len(blist))
 	}
 	if err != nil {
-		t.Errorf("cannot create bookmark item: %v", err)
+		t.Fatalf("cannot create bookmark item: %v", err)
 	}
 	err = uow.DeletePath("/FOLDER1", "A")
 	if err != nil {
-		t.Errorf("cannot delete bookmark path: %s: %v", "/FOLDER1/FOLDER2", err)
+		t.Fatalf("cannot delete bookmark path: %s: %v", "/FOLDER1/FOLDER2", err)
 	}
 
 	blist, err = uow.BookmarkByPath("/FOLDER1", "A")
 	if err != nil {
-		t.Errorf("could not find the given folder %s: %v", "/a", err)
+		t.Fatalf("could not find the given folder %s: %v", "/a", err)
 	}
 	if len(blist) != 0 {
-		t.Errorf("the result should by 0, got %d", len(blist))
+		t.Fatalf("the result should by 0, got %d", len(blist))
 	}
 
 	blist, err = uow.BookmarkByPath("/", "A")
 	if err != nil {
-		t.Errorf("could not find the given folder %s: %v", "/a", err)
+		t.Fatalf("could not find the given folder %s: %v", "/a", err)
 	}
 	for _, item := range blist {
 		if item.Type == store.Folder && item.DisplayName == "FOLDER1" {
-			t.Errorf("the path '/FOLDER1' was not fully deleted")
+			t.Fatalf("the path '/FOLDER1' was not fully deleted")
 		}
 	}
 
