@@ -59,7 +59,7 @@ type BadRequestError struct {
 
 // Error implements the error interface
 func (e BadRequestError) Error() string {
-	return fmt.Sprintf("the request '%s' cannot be fulfilled because: '%v'", e.Request.RequestURI, e.Err)
+	return fmt.Sprintf("the request '%s' cannot be fulfilled because: %v", e.Request.RequestURI, e.Err)
 }
 
 // ServerError is used when an unexpected situation occurred
@@ -70,7 +70,7 @@ type ServerError struct {
 
 // Error implements the error interface
 func (e ServerError) Error() string {
-	return fmt.Sprintf("the request '%s' resulted in an unexpected error: '%v'", e.Request.RequestURI, e.Err)
+	return fmt.Sprintf("the request '%s' resulted in an unexpected error: %v", e.Request.RequestURI, e.Err)
 }
 
 // --------------------------------------------------------------------------
@@ -82,7 +82,7 @@ func ErrBadRequest(err BadRequestError) render.Renderer {
 	return &ProblemDetail{
 		Type:   "about:blank",
 		Title:  "the request cannot be fulfilled",
-		Status: http.StatusNotFound,
+		Status: http.StatusBadRequest,
 		Detail: err.Error(),
 	}
 }
@@ -102,7 +102,7 @@ func ErrServerError(err ServerError) render.Renderer {
 	return &ProblemDetail{
 		Type:   "about:blank",
 		Title:  "cannot service the request",
-		Status: http.StatusNotFound,
+		Status: http.StatusInternalServerError,
 		Detail: err.Error(),
 	}
 }

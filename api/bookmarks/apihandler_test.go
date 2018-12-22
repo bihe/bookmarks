@@ -120,7 +120,7 @@ func TestAPICreateBookmark(t *testing.T) {
 			}`,
 			jwt:      jwt,
 			status:   http.StatusBadRequest,
-			response: `{"status":400,"message":"bad request: cannot create item because of missing folder structure: the folder with path '/' and name 'A' does not exist"}`,
+			response: `{"type":"about:blank","title":"the request cannot be fulfilled","status":400,"detail":"the request '' cannot be fulfilled because: cannot create item because of missing folder structure: the folder with path '/' and name 'A' does not exist"}`,
 		},
 		{
 			name: "Invalid characters",
@@ -133,7 +133,7 @@ func TestAPICreateBookmark(t *testing.T) {
 			}`,
 			jwt:      jwt,
 			status:   http.StatusBadRequest,
-			response: `{"status":400,"message":"bad request: invalid chars in 'DisplayName'"}`,
+			response: `{"type":"about:blank","title":"the request cannot be fulfilled","status":400,"detail":"the request '' cannot be fulfilled because: invalid chars in 'DisplayName'"}`,
 		},
 		{
 			name: "Invalid path",
@@ -146,21 +146,21 @@ func TestAPICreateBookmark(t *testing.T) {
 			}`,
 			jwt:      jwt,
 			status:   http.StatusBadRequest,
-			response: `{"status":400,"message":"bad request: a path cannot end with '/"}`,
+			response: `{"type":"about:blank","title":"the request cannot be fulfilled","status":400,"detail":"the request '' cannot be fulfilled because: a path cannot end with '/"}`,
 		},
 		{
 			name:     "Wrong payload",
 			payload:  "",
 			jwt:      jwt,
 			status:   http.StatusBadRequest,
-			response: `{"status":400,"message":"bad request: EOF"}`,
+			response: `{"type":"about:blank","title":"the request cannot be fulfilled","status":400,"detail":"the request '' cannot be fulfilled because: EOF"}`,
 		},
 		{
 			name:     "No jwt auth token",
 			payload:  "",
 			jwt:      "",
 			status:   http.StatusUnauthorized,
-			response: `{"message":"Invalid authentication, no JWT token present!","status":401}`,
+			response: `{"detail":"Invalid authentication, no JWT token present!","status":401,"title":"security error","type":"about:blank"}`,
 		},
 	}
 
