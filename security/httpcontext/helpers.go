@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/bihe/bookmarks/pkg/httpcontext/header"
+	"github.com/bihe/bookmarks/security/httpcontext/header"
 )
 
 // JSON is a simple map to produce JSON serialized data
@@ -15,6 +15,23 @@ type JSON map[string]interface{}
 // WriteJSON sets the HTTP status code and marshals the data to JSON
 func WriteJSON(w http.ResponseWriter, code int, data map[string]interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(code)
+	b, err := json.Marshal(data)
+	if err != nil {
+		log.SetPrefix("context.WriteJSON")
+		log.Printf("could not marshal json %v\n", err)
+	}
+	_, err = w.Write(b)
+	if err != nil {
+		log.SetPrefix("context.WriteJSON")
+		log.Printf("could not write bytes using http.ResponseWriter: %v\n", err)
+	}
+}
+
+// WriteProblemJSON sets the HTTP status code and marshals the data to JSON
+func WriteProblemJSON(w http.ResponseWriter, code int, data map[string]interface{}) {
+	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(code)
 	b, err := json.Marshal(data)
@@ -55,9 +72,11 @@ func NegotiateError(w http.ResponseWriter, r *http.Request, code int, message, r
 		Write(w, code, "text/plain", []byte(message))
 	default:
 		// default approach is to write JSON
-		WriteJSON(w, code, JSON{
-			"status":  code,
-			"message": message,
+		WriteProblemJSON(w, code, JSON{
+			"type":   "about:blank",
+			"title":  "security error",
+			"status": code,
+			"detail": message,
 		})
 	}
 }

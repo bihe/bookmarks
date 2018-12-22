@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/bihe/bookmarks/core"
-	"github.com/bihe/bookmarks/pkg/httpcontext"
+	"github.com/bihe/bookmarks/security/httpcontext"
 )
 
 // AuthOptions defines presets for the Authentication handler

@@ -82,6 +82,7 @@ func setupAPI(config core.Configuration, ddlFilePath string) *chi.Mux {
 			uow: uow,
 		}
 		r.Route("/bookmarks", func(r chi.Router) {
+			r.Options("/", b.GetAllOptions)
 			r.Get("/", b.GetAll)
 			r.Post("/", b.Create)
 			r.Put("/", b.Update)
