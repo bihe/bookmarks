@@ -12,6 +12,7 @@ variables:
   GOPATH: '$(system.defaultWorkingDirectory)/gopath' # Go workspace path
   modulePath: '$(GOPATH)/src/github.com/$(build.repository.name)' # Path to the module's code
 
+
 steps:
 - script: |
     mkdir -p '$(GOBIN)'
@@ -21,6 +22,8 @@ steps:
     mv !(gopath) '$(modulePath)'
     echo '##vso[task.prependpath]$(GOBIN)'
     echo '##vso[task.prependpath]$(GOROOT)/bin'
+    env:
+      GO111MODULE: 'on'
   displayName: 'Set up the Go workspace'
 
 - script: |
@@ -30,11 +33,13 @@ steps:
     go get github.com/axw/gocov/gocov
     go get github.com/AlekSi/gocov-xml
     go get -u gopkg.in/matm/v1/gocov-html
+    env:
+      GO111MODULE: 'on'
   workingDirectory: '$(modulePath)'
   displayName: 'Get dependencies'
 
 - script: |
-    go test -v -coverprofile=coverage.txt -covermode count 2>&1 | go-junit-report > junit.xml
+    go test -v -coverprofile=coverage.txt -covermode count 2>&1 ./... | go-junit-report > junit.xml
     gocov convert coverage.txt > coverage.json
     gocov-xml < coverage.json > coverage.xml
     gocov-html < coverage.json > index.html
@@ -42,12 +47,16 @@ steps:
     cp junit.xml ./reports/junit.xml
     cp coverage.xml ./reports/coverage.xml
     cp index.html ./reports/index.html
+    env:
+      GO111MODULE: 'on'
   continueOnError: true
   workingDirectory: '$(modulePath)'
   displayName: 'Run unit tests'
 
 - script: |
     go build -v
+    env:
+      GO111MODULE: 'on'
   workingDirectory: '$(modulePath)'
   continueOnError: true
   displayName: 'Build App: bookmarks'
