@@ -187,14 +187,20 @@ func TestDBBookmarks(t *testing.T) {
 
 	blist, err = uow.BookmarkByPath("/FOLDER1/FOLDER2", "A")
 	if err != nil {
-		t.Fatalf("could not find the given folder %s: %v", "/a", err)
+		t.Fatalf("cannot create bookmark item: %v", err)
 	}
 	if len(blist) != 1 {
 		t.Fatalf("the result should by 1, got %d", len(blist))
 	}
+
+	blist, err = uow.BookmarkStartsByPath("/FOLDER1/FOLDER2", "A")
 	if err != nil {
-		t.Fatalf("cannot create bookmark item: %v", err)
+		t.Fatalf("cannot get bookmarks by start-path '%s': %v", "/FOLDER1/FOLDER2", err)
 	}
+	if len(blist) != 1 {
+		t.Fatalf("the result should by 1, got %d", len(blist))
+	}
+
 	err = uow.DeletePath("/FOLDER1", "A")
 	if err != nil {
 		t.Fatalf("cannot delete bookmark path: %s: %v", "/FOLDER1/FOLDER2", err)
