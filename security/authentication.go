@@ -30,7 +30,7 @@ type AuthOptions struct {
 // User is the authenticated principal extracted from the JWT token
 type User struct {
 	Username    string
-	Role        []string
+	Roles       []string
 	Email       string
 	UserID      string
 	DisplayName string
@@ -39,6 +39,23 @@ type User struct {
 // JwtMiddleware is responsible for JWT authentication and authorization
 type JwtMiddleware struct {
 	Options AuthOptions
+}
+
+// NewMiddleware created a new instance using the supplied config options
+func NewMiddleware(config core.Configuration) *JwtMiddleware {
+	return &JwtMiddleware{
+		Options: AuthOptions{
+			CookieName: config.Sec.CookieName,
+			JwtIssuer:  config.Sec.JwtIssuer,
+			JwtSecret:  config.Sec.JwtSecret,
+			RequiredClaim: Claim{
+				Name:  config.Sec.Claim.Name,
+				URL:   config.Sec.Claim.URL,
+				Roles: config.Sec.Claim.Roles,
+			},
+			RedirectURL: config.Sec.LoginRedirect,
+		},
+	}
 }
 
 // JWTContext parses provided information from the request and populates user-data
@@ -76,7 +93,7 @@ func (jwt *JwtMiddleware) JWTContext(next http.Handler) http.Handler {
 		user := &User{
 			DisplayName: payload.DisplayName,
 			Email:       payload.Email,
-			Role:        roles,
+			Roles:       roles,
 			UserID:      payload.UserID,
 			Username:    payload.UserName,
 		}

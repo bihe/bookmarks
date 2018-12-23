@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bihe/bookmarks/api/bookmarks"
 	"github.com/bihe/bookmarks/core"
 	"github.com/wangii/emoji"
 )
@@ -67,10 +66,8 @@ func getOrDefault(env, def string) string {
 func setup() *http.Server {
 	host, port, basePath, configFile := configFromEnv()
 	conf := configFromFile(basePath, configFile)
-
 	core.InitLogger(conf.Log)
-	h := bookmarks.SetupAPI(conf)
-
+	h := SetupAPI(conf)
 	addr := host + ":" + port
 	srv := &http.Server{Addr: addr, Handler: h}
 	return srv

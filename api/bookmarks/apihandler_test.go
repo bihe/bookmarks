@@ -11,8 +11,14 @@ import (
 	"time"
 
 	"github.com/bihe/bookmarks/api/bookmarks"
+
+	"github.com/bihe/bookmarks/store"
+
+	"github.com/bihe/bookmarks/security"
+
 	"github.com/bihe/bookmarks/core"
 	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/go-chi/chi"
 )
 
 func getTestConfig() core.Configuration {
@@ -81,13 +87,29 @@ func getSqliteDDL() string {
 	return path.Join(dir, "_db/", "ddl.sql")
 }
 
+func setupApiInitDB(config core.Configuration, ddlFilePath string) *chi.Mux {
+	r := chi.NewRouter()
+
+	// configure JWT authentication and use JWT middleware
+	r.Use(security.NewMiddleware(config).JWTContext)
+
+	r.Route("/api/v1", func(r chi.Router) {
+		store := store.New(config.DB.Dialect, config.DB.Connection)
+		if ddlFilePath != "" {
+			store.InitSchema(ddlFilePath)
+		}
+		r.Mount("/bookmarks", bookmarks.MountRoutes(store))
+	})
+	return r
+}
+
 func TestAPICreateBookmark(t *testing.T) {
 	ddlFilePath := getSqliteDDL()
 	if ddlFilePath == "" {
 		t.Fatalf("Could not get ddl file for sqlite in memory db!")
 	}
 
-	router := bookmarks.SetupAPIInitDB(getTestConfig(), ddlFilePath)
+	router := setupApiInitDB(getTestConfig(), ddlFilePath)
 	jwt := createToken()
 	tt := []struct {
 		name     string

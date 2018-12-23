@@ -7,12 +7,32 @@ import (
 	"strings"
 
 	"github.com/bihe/bookmarks/api"
-	"github.com/bihe/bookmarks/core"
-	"github.com/bihe/bookmarks/security"
 	"github.com/bihe/bookmarks/store"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 )
+
+// --------------------------------------------------------------------------
+// Bookmark API Routes
+// --------------------------------------------------------------------------
+
+// MountRoutes defines the application specific routes
+func MountRoutes(store *store.UnitOfWork) http.Handler {
+	b := &BookmarkAPI{uow: store}
+
+	r := chi.NewRouter()
+	r.Options("/", b.GetAllOptions)
+	r.Get("/", b.GetAll)
+	r.Post("/", b.Create)
+	r.Put("/", b.Update)
+	r.Get("/{NodeID}", b.GetByID)
+	r.Get("/path", b.FindByPath)
+	r.Delete("/{NodeID}", b.Delete)
+	r.Delete("/{NodeID}/{Force}", b.Delete)
+	r.Get("/search", b.FindByName)
+
+	return r
+}
 
 // --------------------------------------------------------------------------
 // Bookmark API
@@ -26,7 +46,7 @@ type BookmarkAPI struct {
 // GetAllOptions used for OPTIONS request
 func (app *BookmarkAPI) GetAllOptions(w http.ResponseWriter, r *http.Request) {
 	var err error
-	if _, err = app.uow.AllBookmarks(user(r).Username); err != nil {
+	if _, err = app.uow.AllBookmarks(api.User(r).Username); err != nil {
 		render.Render(w, r, api.ErrNotFound(api.NotFoundError{Request: r, Err: err}))
 		return
 	}
@@ -36,7 +56,7 @@ func (app *BookmarkAPI) GetAllOptions(w http.ResponseWriter, r *http.Request) {
 func (app *BookmarkAPI) GetAll(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var bookmarks = make([]store.BookmarkItem, 0)
-	if bookmarks, err = app.uow.AllBookmarks(user(r).Username); err != nil {
+	if bookmarks, err = app.uow.AllBookmarks(api.User(r).Username); err != nil {
 		render.Render(w, r, api.ErrNotFound(api.NotFoundError{Request: r, Err: err}))
 		return
 	}
@@ -52,7 +72,7 @@ func (app *BookmarkAPI) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 	var item *store.BookmarkItem
 	var err error
-	if item, err = app.uow.BookmarkByID(nodeID, user(r).Username); err != nil {
+	if item, err = app.uow.BookmarkByID(nodeID, api.User(r).Username); err != nil {
 		render.Render(w, r, api.ErrNotFound(api.NotFoundError{Request: r, Err: err}))
 		return
 	}
@@ -69,7 +89,7 @@ func (app *BookmarkAPI) FindByPath(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, api.ErrBadRequest(api.BadRequestError{Request: r, Err: fmt.Errorf("no path supplied or missing query-param 'path'")}))
 		return
 	}
-	if bookmarks, err = app.uow.BookmarkByPath(path, user(r).Username); err != nil {
+	if bookmarks, err = app.uow.BookmarkByPath(path, api.User(r).Username); err != nil {
 		render.Render(w, r, api.ErrNotFound(api.NotFoundError{Request: r, Err: err}))
 		return
 	}
@@ -85,7 +105,7 @@ func (app *BookmarkAPI) FindByName(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, api.ErrBadRequest(api.BadRequestError{Request: r, Err: fmt.Errorf("no name supplied or missing query-param 'name'")}))
 		return
 	}
-	if bookmarks, err = app.uow.BookmarkByName(name, user(r).Username); err != nil {
+	if bookmarks, err = app.uow.BookmarkByName(name, api.User(r).Username); err != nil {
 		render.Render(w, r, api.ErrNotFound(api.NotFoundError{Request: r, Err: err}))
 		return
 	}
@@ -111,7 +131,7 @@ func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// check if the given folder-structure is available
-	if err := ValidatePath(bookmark.Path, dbFolderValidator{uow: app.uow, user: user(r).Username}); err != nil {
+	if err := ValidatePath(bookmark.Path, dbFolderValidator{uow: app.uow, user: api.User(r).Username}); err != nil {
 		render.Render(w, r, api.ErrBadRequest(api.BadRequestError{
 			Request: r,
 			Err:     fmt.Errorf("cannot create item because of missing folder structure: %v", err)}))
@@ -138,7 +158,7 @@ func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 		URL:         url,
 		SortOrder:   bookmark.SortOrder,
 		Type:        t,
-		Username:    user(r).Username,
+		Username:    api.User(r).Username,
 	})
 	if err != nil {
 		render.Render(w, r, api.ErrBadRequest(api.BadRequestError{Request: r, Err: err}))
@@ -162,7 +182,7 @@ func (app *BookmarkAPI) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	bookmark = data.Bookmark
 
-	if _, err := app.uow.BookmarkByID(bookmark.NodeID, user(r).Username); err != nil {
+	if _, err := app.uow.BookmarkByID(bookmark.NodeID, api.User(r).Username); err != nil {
 		render.Render(w, r, api.ErrNotFound(api.NotFoundError{Request: r, Err: fmt.Errorf("bookmark with ID '%s' not available", bookmark.NodeID)}))
 		return
 	}
@@ -172,7 +192,7 @@ func (app *BookmarkAPI) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// check if the given folder-structure is available
-	if err := ValidatePath(bookmark.Path, dbFolderValidator{uow: app.uow, user: user(r).Username}); err != nil {
+	if err := ValidatePath(bookmark.Path, dbFolderValidator{uow: app.uow, user: api.User(r).Username}); err != nil {
 		render.Render(w, r, api.ErrBadRequest(api.BadRequestError{
 			Request: r,
 			Err:     fmt.Errorf("cannot update item because of missing folder structure: %v", err),
@@ -193,7 +213,7 @@ func (app *BookmarkAPI) Update(w http.ResponseWriter, r *http.Request) {
 		Path:        bookmark.Path,
 		URL:         url,
 		SortOrder:   bookmark.SortOrder,
-		Username:    user(r).Username,
+		Username:    api.User(r).Username,
 	})
 	if err != nil {
 		render.Render(w, r, api.ErrBadRequest(api.BadRequestError{Request: r, Err: err}))
@@ -216,12 +236,12 @@ func (app *BookmarkAPI) Delete(w http.ResponseWriter, r *http.Request) {
 
 	var item *store.BookmarkItem
 	var err error
-	if item, err = app.uow.BookmarkByID(nodeID, user(r).Username); err != nil {
+	if item, err = app.uow.BookmarkByID(nodeID, api.User(r).Username); err != nil {
 		render.Render(w, r, api.ErrNotFound(api.NotFoundError{Request: r, Err: err}))
 		return
 	}
 	if item.Type == store.Node {
-		err := app.uow.Delete(nodeID, user(r).Username)
+		err := app.uow.Delete(nodeID, api.User(r).Username)
 		if err != nil {
 			render.Render(w, r, api.ErrBadRequest(api.BadRequestError{Request: r, Err: err}))
 			return
@@ -237,13 +257,13 @@ func (app *BookmarkAPI) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var bookmarks []store.BookmarkItem
-	if bookmarks, err = app.uow.BookmarkStartsByPath(path, user(r).Username); err != nil {
+	if bookmarks, err = app.uow.BookmarkStartsByPath(path, api.User(r).Username); err != nil {
 		render.Render(w, r, api.ErrServerError(api.ServerError{Request: r, Err: err}))
 		return
 	}
 	if len(bookmarks) == 0 {
 		// all is good, we can just delete the item
-		err := app.uow.Delete(nodeID, user(r).Username)
+		err := app.uow.Delete(nodeID, api.User(r).Username)
 		if err != nil {
 			render.Render(w, r, api.ErrBadRequest(api.BadRequestError{Request: r, Err: err}))
 			return
@@ -259,7 +279,7 @@ func (app *BookmarkAPI) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// force:True is supplied, so no matter what, we will delete the whole path
-	err = app.uow.DeletePath(path, user(r).Username)
+	err = app.uow.DeletePath(path, api.User(r).Username)
 	if err != nil {
 		render.Render(w, r, api.ErrBadRequest(api.BadRequestError{
 			Request: r,
@@ -320,12 +340,4 @@ func mapBookmarks(vs []store.BookmarkItem) []Bookmark {
 		vsm[i] = mapBookmark(v)
 	}
 	return vsm
-}
-
-func user(r *http.Request) *security.User {
-	user := r.Context().Value(core.ContextUser).(*security.User)
-	if user == nil {
-		panic("could not get User from context")
-	}
-	return user
 }
