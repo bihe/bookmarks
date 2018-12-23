@@ -42,7 +42,7 @@ func SetupAPI(config core.Configuration) *chi.Mux {
 	r.Route("/api/v1", func(r chi.Router) {
 		store := store.New(config.DB.Dialect, config.DB.Connection)
 		r.Mount("/bookmarks", bookmarks.MountRoutes(store))
-		r.Mount("/appinfo", api.MountRoutes())
+		r.Mount("/appinfo", api.MountRoutes(Version, Build))
 		
 	})
 	return r

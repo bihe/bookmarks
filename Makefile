@@ -3,6 +3,10 @@ PROJECTNAME=$(shell basename "$(PWD)")
 # Make is verbose in Linux. Make it silent.
 MAKEFLAGS += --silent
 
+VERSION="1.0.0-"
+COMMIT=`git rev-parse HEAD | cut -c 1-8`
+BUILD=`date -u +%Y%m%d.%H%M%S`
+
 compile:
 	@-$(MAKE) -s go-compile
 
@@ -37,8 +41,7 @@ go-build:
 
 go-build-release:
 	@echo "  >  Building binary..."
-	GOOS=linux go build -race -ldflags="-s -w" -tags prod -o bookmarks.api ./*.go
-
+	GOOS=linux go build -race -ldflags="-s -w -X main.Version=${VERSION}${COMMIT} -X main.Build=${BUILD}" -tags prod -o bookmarks.api ./*.go
 go-clean:
 	@echo "  >  Cleaning build cache"
 	go clean ./...

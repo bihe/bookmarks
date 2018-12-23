@@ -51,9 +51,10 @@ func (a AppInfoResponse) Render(w http.ResponseWriter, r *http.Request) error {
 // --------------------------------------------------------------------------
 
 // MountRoutes defines the application specific routes
-func MountRoutes() http.Handler {
+func MountRoutes(version, build string) http.Handler {
 	r := chi.NewRouter()
-	r.Get("/", GetAppInfo)
+	api := appInfoAPI{version: version, build: build}
+	r.Get("/", api.GetAppInfo)
 
 	return r
 }
@@ -62,8 +63,13 @@ func MountRoutes() http.Handler {
 // AppInfo API
 // --------------------------------------------------------------------------
 
+type appInfoAPI struct {
+	version string
+	build   string
+}
+
 // GetAppInfo returns information about current user and version of the application
-func GetAppInfo(w http.ResponseWriter, r *http.Request) {
+func (a appInfoAPI) GetAppInfo(w http.ResponseWriter, r *http.Request) {
 	user := User(r)
 	userInfo := UserInfo{
 		Username:      user.Username,
@@ -71,9 +77,17 @@ func GetAppInfo(w http.ResponseWriter, r *http.Request) {
 		Roles:         user.Roles,
 		Authenticated: true,
 	}
+	version := "1.0.0"
+	build := "localbuild"
+	if a.version != "" {
+		version = a.version
+	}
+	if a.build != "" {
+		build = a.build
+	}
 	versionInfo := VersionInfo{
-		Version: Version,
-		Build:   Build,
+		Version: version,
+		Build:   build,
 	}
 	appInfo := AppInfo{
 		User:    userInfo,

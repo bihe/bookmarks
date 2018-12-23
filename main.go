@@ -16,12 +16,20 @@ import (
 	"github.com/wangii/emoji"
 )
 
+var (
+	// Version exports the application version
+	Version string
+	// Build provides information about the application build
+	Build string
+)
+
 // graceful stop taken from https://gist.github.com/peterhellberg/38117e546c217960747aacf689af3dc2
 func main() {
 	srv := setup()
 	go func() {
 		log.Printf("%s Starting server ...", emoji.EmojiTagToUnicode(`:rocket:`))
-		log.Printf("%s Listening on '%s'\n", emoji.EmojiTagToUnicode(`:computer:`), srv.Addr)
+		log.Printf("%s Listening on '%s'", emoji.EmojiTagToUnicode(`:computer:`), srv.Addr)
+		log.Printf("%s Version: '%s-%s'\n", emoji.EmojiTagToUnicode(`:bookmark:`), Version, Build)
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatal(err)
 		}
