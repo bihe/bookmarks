@@ -10,6 +10,7 @@ import (
 	"github.com/bihe/bookmarks/store"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
+	"github.com/microcosm-cc/bluemonday"
 )
 
 // --------------------------------------------------------------------------
@@ -18,7 +19,7 @@ import (
 
 // MountRoutes defines the application specific routes
 func MountRoutes(store *store.UnitOfWork) http.Handler {
-	b := &BookmarkAPI{uow: store}
+	b := &BookmarkAPI{uow: store, policy: bluemonday.UGCPolicy()}
 
 	r := chi.NewRouter()
 	r.Options("/", b.GetAllOptions)
@@ -41,6 +42,8 @@ func MountRoutes(store *store.UnitOfWork) http.Handler {
 // BookmarkAPI combines the API methods of the bookmarks logic
 type BookmarkAPI struct {
 	uow *store.UnitOfWork
+	// policy is used to sanitize user input - prevent XSS
+	policy *bluemonday.Policy
 }
 
 // GetAllOptions used for OPTIONS request
@@ -89,6 +92,7 @@ func (app *BookmarkAPI) FindByPath(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, api.ErrBadRequest(api.BadRequestError{Request: r, Err: fmt.Errorf("no path supplied or missing query-param 'path'")}))
 		return
 	}
+	path = sanitizeInput(app.policy, path)
 	if bookmarks, err = app.uow.BookmarkByPath(path, api.User(r).Username); err != nil {
 		render.Render(w, r, api.ErrNotFound(api.NotFoundError{Request: r, Err: err}))
 		return
@@ -105,6 +109,7 @@ func (app *BookmarkAPI) FindByName(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, api.ErrBadRequest(api.BadRequestError{Request: r, Err: fmt.Errorf("no name supplied or missing query-param 'name'")}))
 		return
 	}
+	name = sanitizeInput(app.policy, name)
 	if bookmarks, err = app.uow.BookmarkByName(name, api.User(r).Username); err != nil {
 		render.Render(w, r, api.ErrNotFound(api.NotFoundError{Request: r, Err: err}))
 		return
@@ -340,4 +345,9 @@ func mapBookmarks(vs []store.BookmarkItem) []Bookmark {
 		vsm[i] = mapBookmark(v)
 	}
 	return vsm
+}
+
+// sanitizeInput removes unwanted elements from the user-input
+func sanitizeInput(policy *bluemonday.Policy, input string) string {
+	return policy.Sanitize(input)
 }
