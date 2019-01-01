@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/go-chi/render"
 )
 
 // --------------------------------------------------------------------------
@@ -104,7 +106,7 @@ func (b BookmarkResponse) Render(w http.ResponseWriter, r *http.Request) error {
 type BookmarkCreatedResponse struct {
 	HTTPStatusCode int    `json:"status"`            // http response status code
 	Message        string `json:"message,omitempty"` // application-level message
-	NodeID         string `json:"nodeId,omitempty"`  // the ID of the creted bookmark
+	NodeID         string `json:"nodeId,omitempty"`  // the ID of the created bookmark
 }
 
 // NewBookmarkCreatedResponse created a success result
@@ -119,6 +121,7 @@ func NewBookmarkCreatedResponse(code int, message, nodeID string) *BookmarkCreat
 // Render is the overloaded method for the ErrResponse
 func (s *BookmarkCreatedResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	// Pre-processing before a response is marshalled and sent across the wire
+	render.Status(r, s.HTTPStatusCode)
 	return nil
 }
 

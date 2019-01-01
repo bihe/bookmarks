@@ -204,6 +204,7 @@ func TestAPICreateBookmark(t *testing.T) {
 }
 
 func TestAPIGetBookmarks(t *testing.T) {
+	// first: create a fresh bookmark
 	payload := `{
 		"path":"/",
 		"displayName":"Test",
@@ -245,7 +246,6 @@ func TestAPIGetBookmarks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
 	req.Header.Add("Content-Type", "application/json")
 	router.ServeHTTP(w, req)
@@ -259,6 +259,28 @@ func TestAPIGetBookmarks(t *testing.T) {
 		t.Fatal(err)
 	}
 	if bl.Count != 1 {
-		t.Fatalf("expected '1' bookarks but got '%d'", bl.Count)
+		t.Fatalf("expected '1' bookmarks but got '%d'", bl.Count)
+	}
+
+	// query a specific bookmark - using the NodeID from above
+	w = httptest.NewRecorder()
+	req, err = http.NewRequest("GET", "/api/v1/bookmarks/"+bc.NodeID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
+	req.Header.Add("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("the status should be '%d' but got '%d'", http.StatusOK, w.Code)
+	}
+	var br bookmarks.BookmarkResponse
+	err = json.Unmarshal(w.Body.Bytes(), &br)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if br.NodeID != bc.NodeID {
+		t.Fatalf("expected ID '%s' but got ID '%s'", bc.NodeID, br.NodeID)
 	}
 }
