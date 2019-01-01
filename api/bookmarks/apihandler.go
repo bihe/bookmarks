@@ -157,9 +157,9 @@ func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 		url = ""
 	}
 
-	_, err := app.uow.CreateBookmark(store.BookmarkItem{
-		DisplayName: bookmark.DisplayName,
-		Path:        bookmark.Path,
+	b, err := app.uow.CreateBookmark(store.BookmarkItem{
+		DisplayName: sanitizeInput(app.policy, bookmark.DisplayName),
+		Path:        sanitizeInput(app.policy, bookmark.Path),
 		URL:         url,
 		SortOrder:   bookmark.SortOrder,
 		Type:        t,
@@ -169,7 +169,7 @@ func (app *BookmarkAPI) Create(w http.ResponseWriter, r *http.Request) {
 		render.Render(w, r, api.ErrBadRequest(api.BadRequestError{Request: r, Err: err}))
 		return
 	}
-	render.Render(w, r, api.SuccessResult(http.StatusCreated, fmt.Sprintf("bookmark item created: p:%s, n:%s", bookmark.Path, bookmark.DisplayName)))
+	render.Render(w, r, NewBookmarkCreatedResponse(http.StatusCreated, fmt.Sprintf("bookmark item created: p:%s, n:%s", bookmark.Path, bookmark.DisplayName), b.ItemID))
 }
 
 // Update a bookmark item with new values. The type of the bookmark Node/Folder is not updated.
@@ -214,8 +214,8 @@ func (app *BookmarkAPI) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	err := app.uow.UpdateBookmark(store.BookmarkItem{
 		ItemID:      bookmark.NodeID,
-		DisplayName: bookmark.DisplayName,
-		Path:        bookmark.Path,
+		DisplayName: sanitizeInput(app.policy, bookmark.DisplayName),
+		Path:        sanitizeInput(app.policy, bookmark.Path),
 		URL:         url,
 		SortOrder:   bookmark.SortOrder,
 		Username:    api.User(r).Username,

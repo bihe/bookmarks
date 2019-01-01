@@ -52,6 +52,10 @@ func (b Bookmark) Validate() error {
 	return nil
 }
 
+// --------------------------------------------------------------------------
+// BookmarkRequest
+// --------------------------------------------------------------------------
+
 // BookmarkRequest is the request payload for Bookmark data model.
 type BookmarkRequest struct {
 	*Bookmark
@@ -66,6 +70,10 @@ func (b *BookmarkRequest) Bind(r *http.Request) error {
 	}
 	return nil
 }
+
+// --------------------------------------------------------------------------
+// BookmarkResponse
+// --------------------------------------------------------------------------
 
 // BookmarkResponse is the response payload for the Bookmark data model.
 //
@@ -87,6 +95,36 @@ func (b BookmarkResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	// Pre-processing before a response is marshalled and sent across the wire
 	return nil
 }
+
+// --------------------------------------------------------------------------
+// BookmarkCreatedResponse
+// --------------------------------------------------------------------------
+
+// BookmarkCreatedResponse defines a generic success status
+type BookmarkCreatedResponse struct {
+	HTTPStatusCode int    `json:"status"`            // http response status code
+	Message        string `json:"message,omitempty"` // application-level message
+	NodeID         string `json:"nodeId,omitempty"`  // the ID of the creted bookmark
+}
+
+// NewBookmarkCreatedResponse created a success result
+func NewBookmarkCreatedResponse(code int, message, nodeID string) *BookmarkCreatedResponse {
+	return &BookmarkCreatedResponse{
+		HTTPStatusCode: code,
+		Message:        message,
+		NodeID:         nodeID,
+	}
+}
+
+// Render is the overloaded method for the ErrResponse
+func (s *BookmarkCreatedResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	// Pre-processing before a response is marshalled and sent across the wire
+	return nil
+}
+
+// --------------------------------------------------------------------------
+// BookmarkListResponse
+// --------------------------------------------------------------------------
 
 // BookmarkListResponse defines a list type
 type BookmarkListResponse struct {

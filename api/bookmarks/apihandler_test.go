@@ -1,6 +1,7 @@
 package bookmarks_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,12 +12,9 @@ import (
 	"time"
 
 	"github.com/bihe/bookmarks/api/bookmarks"
-
-	"github.com/bihe/bookmarks/store"
-
-	"github.com/bihe/bookmarks/security"
-
 	"github.com/bihe/bookmarks/core"
+	"github.com/bihe/bookmarks/security"
+	"github.com/bihe/bookmarks/store"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/go-chi/chi"
 )
@@ -129,7 +127,7 @@ func TestAPICreateBookmark(t *testing.T) {
 			}`,
 			jwt:      jwt,
 			status:   http.StatusCreated,
-			response: `{"status":201,"message":"bookmark item created: p:/, n:Test"}`,
+			response: `{"status":201,"message":"bookmark item created: p:/, n:Test"`,
 		},
 		{
 			name: "Missing folder",
@@ -195,12 +193,72 @@ func TestAPICreateBookmark(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			if w.Code != tc.status {
-				t.Errorf("the status should be '%d' but got '%d'", tc.status, w.Code)
+				t.Fatalf("the status should be '%d' but got '%d'", tc.status, w.Code)
 			}
-			if strings.TrimSpace(w.Body.String()) != tc.response {
-				t.Errorf("expected response '%s' but got '%s'", tc.response, strings.TrimSpace(w.Body.String()))
+			if strings.Index(strings.TrimSpace(w.Body.String()), tc.response) == -1 {
+				t.Fatalf("expected response '%s' but got '%s'", tc.response, strings.TrimSpace(w.Body.String()))
 			}
 		})
 
+	}
+}
+
+func TestAPIGetBookmarks(t *testing.T) {
+	payload := `{
+		"path":"/",
+		"displayName":"Test",
+		"url": "http://a.b.c.de",
+		"sortOrder": 1,
+		"type": "node"
+	}`
+	jwt := createToken()
+	ddlFilePath := getSqliteDDL()
+	if ddlFilePath == "" {
+		t.Fatalf("Could not get ddl file for sqlite in memory db!")
+	}
+	router := setupApiInitDB(getTestConfig(), ddlFilePath)
+
+	w := httptest.NewRecorder()
+	req, err := http.NewRequest("POST", "/api/v1/bookmarks", strings.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
+	req.Header.Add("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("the status should be '%d' but got '%d'", http.StatusCreated, w.Code)
+	}
+	var bc bookmarks.BookmarkCreatedResponse
+	err = json.Unmarshal(w.Body.Bytes(), &bc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bc.NodeID == "" {
+		t.Fatalf("did not get ID from create-bookmarks-call!")
+	}
+
+	// query all bookmarks
+	w = httptest.NewRecorder()
+	req, err = http.NewRequest("GET", "/api/v1/bookmarks", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
+	req.Header.Add("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("the status should be '%d' but got '%d'", http.StatusOK, w.Code)
+	}
+	var bl bookmarks.BookmarkListResponse
+	err = json.Unmarshal(w.Body.Bytes(), &bl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bl.Count != 1 {
+		t.Fatalf("expected '1' bookarks but got '%d'", bl.Count)
 	}
 }
