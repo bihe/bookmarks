@@ -281,6 +281,219 @@ func TestAPIGetBookmarks(t *testing.T) {
 		t.Fatal(err)
 	}
 	if br.NodeID != bc.NodeID {
-		t.Fatalf("expected ID '%s' but got ID '%s'", bc.NodeID, br.NodeID)
+		t.Fatalf("expected ID '%s' but got '%s'", bc.NodeID, br.NodeID)
 	}
+	if br.DisplayName != "Test" {
+		t.Fatalf("expected DisplayName '%s' but got '%s'", "Test", br.DisplayName)
+	}
+
+	// find bookmark by path
+	w = httptest.NewRecorder()
+	req, err = http.NewRequest("GET", "/api/v1/bookmarks/path?path=/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
+	req.Header.Add("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("the status should be '%d' but got '%d'", http.StatusOK, w.Code)
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &bl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bl.Count != 1 {
+		t.Fatalf("expected '1' bookmarks but got '%d'", bl.Count)
+	}
+	if bl.List[0].DisplayName != "Test" {
+		t.Fatalf("expected bookmark with DisplayName '%s' but got '%s'", "Test", bl.List[0].DisplayName)
+	}
+
+	// search bookmarks
+	w = httptest.NewRecorder()
+	req, err = http.NewRequest("GET", "/api/v1/bookmarks/search?name=EST", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
+	req.Header.Add("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("the status should be '%d' but got '%d'", http.StatusOK, w.Code)
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &bl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bl.Count != 1 {
+		t.Fatalf("expected '1' bookmarks but got '%d'", bl.Count)
+	}
+	if bl.List[0].DisplayName != "Test" {
+		t.Fatalf("expected bookmark with DisplayName '%s' but got '%s'", "Test", bl.List[0].DisplayName)
+	}
+}
+
+func TestAPIUpdateBookmark(t *testing.T) {
+	// first: create a fresh bookmark
+	payload := `{
+		"path":"/",
+		"displayName":"Test",
+		"url": "http://a.b.c.de",
+		"sortOrder": 1,
+		"type": "node"
+	}`
+	jwt := createToken()
+	ddlFilePath := getSqliteDDL()
+	if ddlFilePath == "" {
+		t.Fatalf("Could not get ddl file for sqlite in memory db!")
+	}
+	router := setupApiInitDB(getTestConfig(), ddlFilePath)
+
+	w := httptest.NewRecorder()
+	req, err := http.NewRequest("POST", "/api/v1/bookmarks", strings.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
+	req.Header.Add("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("the status should be '%d' but got '%d'", http.StatusCreated, w.Code)
+	}
+	var bc bookmarks.BookmarkCreatedResponse
+	err = json.Unmarshal(w.Body.Bytes(), &bc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bc.NodeID == "" {
+		t.Fatalf("did not get ID from create-bookmarks-call!")
+	}
+
+	// update a bookmark
+	update := `{
+		"path":"/",
+		"displayName":"Test (update)",
+		"url": "http://a.b.c.de",
+		"sortOrder": 1,
+		"type": "node",
+		"nodeId": "%s"
+	}`
+
+	w = httptest.NewRecorder()
+	req, err = http.NewRequest("PUT", "/api/v1/bookmarks", strings.NewReader(fmt.Sprintf(update, bc.NodeID)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
+	req.Header.Add("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("the status should be '%d' but got '%d'", http.StatusOK, w.Code)
+	}
+	expectedResp := fmt.Sprintf("bookmark item updated: %s/%s", "/", "Test (update)")
+	if strings.Index(strings.TrimSpace(w.Body.String()), expectedResp) == -1 {
+		t.Fatalf("expected response '%s' but got '%s'", expectedResp, strings.TrimSpace(w.Body.String()))
+	}
+
+	// query a specific bookmark - using the NodeID from above
+	w = httptest.NewRecorder()
+	req, err = http.NewRequest("GET", "/api/v1/bookmarks/"+bc.NodeID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
+	req.Header.Add("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("the status should be '%d' but got '%d'", http.StatusOK, w.Code)
+	}
+	var br bookmarks.BookmarkResponse
+	err = json.Unmarshal(w.Body.Bytes(), &br)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if br.NodeID != bc.NodeID {
+		t.Fatalf("expected ID '%s' but got '%s'", bc.NodeID, br.NodeID)
+	}
+	if br.DisplayName != "Test (update)" {
+		t.Fatalf("expected DisplayName '%s' but got '%s'", "Test", br.DisplayName)
+	}
+
+}
+
+func TestAPIDeleteBookmark(t *testing.T) {
+	// first: create a fresh bookmark
+	payload := `{
+		"path":"/",
+		"displayName":"Test",
+		"url": "http://a.b.c.de",
+		"sortOrder": 1,
+		"type": "node"
+	}`
+	jwt := createToken()
+	ddlFilePath := getSqliteDDL()
+	if ddlFilePath == "" {
+		t.Fatalf("Could not get ddl file for sqlite in memory db!")
+	}
+	router := setupApiInitDB(getTestConfig(), ddlFilePath)
+
+	w := httptest.NewRecorder()
+	req, err := http.NewRequest("POST", "/api/v1/bookmarks", strings.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
+	req.Header.Add("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("the status should be '%d' but got '%d'", http.StatusCreated, w.Code)
+	}
+	var bc bookmarks.BookmarkCreatedResponse
+	err = json.Unmarshal(w.Body.Bytes(), &bc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bc.NodeID == "" {
+		t.Fatalf("did not get ID from create-bookmarks-call!")
+	}
+
+	// delete the bookmark
+	w = httptest.NewRecorder()
+	req, err = http.NewRequest("DELETE", "/api/v1/bookmarks/"+bc.NodeID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
+	req.Header.Add("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("the status should be '%d' but got '%d'", http.StatusOK, w.Code)
+	}
+	expectedResp := fmt.Sprintf("bookmark item was deleted: '%s'", bc.NodeID)
+	if strings.Index(strings.TrimSpace(w.Body.String()), expectedResp) == -1 {
+		t.Fatalf("expected response '%s' but got '%s'", expectedResp, strings.TrimSpace(w.Body.String()))
+	}
+
+	// query a specific bookmark - using the NodeID from above
+	w = httptest.NewRecorder()
+	req, err = http.NewRequest("GET", "/api/v1/bookmarks/"+bc.NodeID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwt))
+	req.Header.Add("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("the status should be '%d' but got '%d'", http.StatusOK, w.Code)
+	}
+
 }
