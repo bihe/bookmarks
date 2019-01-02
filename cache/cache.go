@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Cache defines the interface to store keys in the cache
+// MemoryCache defines the interface to store keys in the cache
 // copied from https://github.com/goenning/go-cache-demo
 // see https://github.com/goenning/go-cache-demo/blob/master/LICENSE
 // initially created by: https://github.com/goenning
