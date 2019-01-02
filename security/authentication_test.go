@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/bihe/bookmarks/core"
 	"github.com/bihe/bookmarks/security"
 )
 
@@ -19,14 +20,16 @@ func GetTestHandler() http.HandlerFunc {
 }
 
 func TestAuthenticationHandler(t *testing.T) {
-	o := security.AuthOptions{
-		JwtIssuer:     "i",
-		JwtSecret:     "s",
-		CookieName:    "c",
-		RedirectURL:   "http://locahost/redirect",
-		RequiredClaim: security.Claim{Name: "bookmarks", URL: "http://localhost", Roles: []string{"User"}},
+	c := core.Configuration{
+		Sec: core.Security{
+			JwtIssuer:     "i",
+			JwtSecret:     "s",
+			CookieName:    "c",
+			LoginRedirect: "http://locahost/redirect",
+			Claim:         core.Claim{Name: "bookmarks", URL: "http://localhost", Roles: []string{"User"}},
+		},
 	}
-	j := security.JwtMiddleware{Options: o}
+	j := security.NewMiddleware(c)
 	ts := httptest.NewServer(j.JWTContext(GetTestHandler()))
 	defer ts.Close()
 

@@ -21,6 +21,7 @@ type Security struct {
 	CookieName    string `json:"cookieName"`
 	LoginRedirect string `json:"loginRedirect"`
 	Claim         Claim  `json:"claim"`
+	CacheDuration string `json:"cacheDuration"`
 }
 
 // Database defines the connection string

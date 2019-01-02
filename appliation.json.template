@@ -8,7 +8,8 @@
             "name": "bookmarks",
             "url": "http://localhost:3000",
             "roles": ["User"]
-        }
+        },
+        "cacheDuration": "10m"
     },
     "database": {
         "connectionString": ":memory:",

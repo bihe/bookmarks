@@ -15,7 +15,8 @@ const config = `{
             "name": "bookmarks",
             "url": "http://localhost:3000",
             "roles": ["User", "Admin"]
-	}
+	},
+	"cacheDuration": "10m"
     },
     "database": {
 	"connectionString": "./bookmarks.db",
@@ -47,6 +48,10 @@ func TestConfigReader(t *testing.T) {
 
 	if config.Sec.JwtSecret != "secret" || config.Sec.Claim.Name != "bookmarks" || config.Sec.LoginRedirect != "https://login.url.com" || config.DB.Connection != "./bookmarks.db" || config.DB.Dialect != "sqlite" {
 		t.Error("Config values not read!")
+	}
+
+	if config.Sec.CacheDuration != "10m" {
+		t.Error("Config value Sec.CacheDuration not read!")
 	}
 
 	if config.Log.Prefix != "prefix" {
