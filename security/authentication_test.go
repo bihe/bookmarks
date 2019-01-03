@@ -27,6 +27,7 @@ func TestAuthenticationHandler(t *testing.T) {
 			CookieName:    "c",
 			LoginRedirect: "http://locahost/redirect",
 			Claim:         core.Claim{Name: "bookmarks", URL: "http://localhost", Roles: []string{"User"}},
+			CacheDuration: "10s",
 		},
 	}
 	j := security.NewMiddleware(c)

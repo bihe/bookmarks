@@ -2,14 +2,12 @@ package security
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/bihe/bookmarks/cache"
 	"github.com/bihe/bookmarks/core"
 	"github.com/bihe/bookmarks/security/httpcontext"
 )
@@ -41,20 +39,10 @@ type User struct {
 	DisplayName string
 }
 
-func (u User) serialize() ([]byte, error) {
-	b, err := json.Marshal(u)
-	return b, err
-}
-
-func (u *User) deserialize(b []byte) error {
-	err := json.Unmarshal(b, u)
-	return err
-}
-
 // JwtMiddleware is responsible for JWT authentication and authorization
 type JwtMiddleware struct {
 	options AuthOptions
-	cache   *cache.MemoryCache
+	cache   *memoryCache
 }
 
 // NewMiddleware creates a new instance using the supplied config options
@@ -72,8 +60,16 @@ func NewMiddleware(config core.Configuration) *JwtMiddleware {
 			RedirectURL:   config.Sec.LoginRedirect,
 			CacheDuration: config.Sec.CacheDuration,
 		},
-		cache: cache.NewCache(),
+		cache: newMemCache(parseDuration(config.Sec.CacheDuration)),
 	}
+}
+
+func parseDuration(duration string) time.Duration {
+	d, err := time.ParseDuration(duration)
+	if err != nil {
+		panic(fmt.Sprintf("wrong config file, cannot parse duration: %v", err))
+	}
+	return d
 }
 
 // JWTContext parses provided information from the request and populates user-data
@@ -99,16 +95,11 @@ func (jwt *JwtMiddleware) JWTContext(next http.Handler) http.Handler {
 
 		// to speed up processing use the cache for token lookups
 		var user User
-		u := jwt.cache.Get(token)
+		u := jwt.cache.get(token)
 		if u != nil {
-			err = user.deserialize(u)
-			if err == nil {
-				ctx := context.WithValue(r.Context(), core.ContextUser, &user)
-				next.ServeHTTP(w, r.WithContext(ctx))
-				return
-			}
-
-			log.Printf("Could not use cached value of user, continue validating JWT token: %v.", err)
+			ctx := context.WithValue(r.Context(), core.ContextUser, u)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
 		}
 
 		var payload JwtTokenPayload
@@ -131,18 +122,7 @@ func (jwt *JwtMiddleware) JWTContext(next http.Handler) http.Handler {
 			UserID:      payload.UserID,
 			Username:    payload.UserName,
 		}
-
-		u, err = user.serialize()
-		if err != nil {
-			log.Printf("Could not marshall the User object for caching: %v", err)
-		} else {
-			d, err := time.ParseDuration(jwt.options.CacheDuration)
-			if err == nil {
-				jwt.cache.Set(token, u, d)
-			} else {
-				log.Printf("Could not cache User object because of duration parsing error: %v", err)
-			}
-		}
+		jwt.cache.set(token, &user)
 
 		ctx := context.WithValue(r.Context(), core.ContextUser, &user)
 		next.ServeHTTP(w, r.WithContext(ctx))

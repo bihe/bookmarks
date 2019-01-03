@@ -28,6 +28,7 @@ func getTestConfig() core.Configuration {
 			CookieName:    "c",
 			LoginRedirect: "http://locahost/redirect",
 			Claim:         core.Claim{Name: "bookmarks", URL: "http://localhost", Roles: []string{"User"}},
+			CacheDuration: "10s",
 		},
 		FS: core.FileServer{
 			Path:    "/tmp",
