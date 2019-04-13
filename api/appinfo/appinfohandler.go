@@ -1,8 +1,9 @@
-package api
+package appinfo
 
 import (
 	"net/http"
 
+	"github.com/bihe/bookmarks/api"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 )
@@ -35,13 +36,13 @@ type AppInfo struct {
 // Framework specific objects
 // --------------------------------------------------------------------------
 
-// AppInfoResponse wraps the data structs into a framework response
-type AppInfoResponse struct {
+// Response wraps the data structs into a framework response
+type Response struct {
 	*AppInfo
 }
 
 // Render the specific response
-func (a AppInfoResponse) Render(w http.ResponseWriter, r *http.Request) error {
+func (a Response) Render(w http.ResponseWriter, r *http.Request) error {
 	// Pre-processing before a response is marshalled and sent across the wire
 	return nil
 }
@@ -70,7 +71,7 @@ type appInfoAPI struct {
 
 // GetAppInfo returns information about current user and version of the application
 func (a appInfoAPI) GetAppInfo(w http.ResponseWriter, r *http.Request) {
-	user := User(r)
+	user := api.User(r)
 	userInfo := UserInfo{
 		Username:      user.Username,
 		DisplayName:   user.DisplayName,
@@ -93,5 +94,5 @@ func (a appInfoAPI) GetAppInfo(w http.ResponseWriter, r *http.Request) {
 		User:    userInfo,
 		Version: versionInfo,
 	}
-	render.Render(w, r, AppInfoResponse{AppInfo: &appInfo})
+	render.Render(w, r, Response{AppInfo: &appInfo})
 }
