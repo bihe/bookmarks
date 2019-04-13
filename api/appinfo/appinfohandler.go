@@ -3,7 +3,7 @@ package appinfo
 import (
 	"net/http"
 
-	"github.com/bihe/bookmarks/api"
+	"github.com/bihe/bookmarks/api/context"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 )
@@ -54,7 +54,7 @@ func (a Response) Render(w http.ResponseWriter, r *http.Request) error {
 // MountRoutes defines the application specific routes
 func MountRoutes(version, build string) http.Handler {
 	r := chi.NewRouter()
-	api := appInfoAPI{version: version, build: build}
+	api := iAPI{version: version, build: build}
 	r.Get("/", api.GetAppInfo)
 
 	return r
@@ -64,14 +64,14 @@ func MountRoutes(version, build string) http.Handler {
 // AppInfo API
 // --------------------------------------------------------------------------
 
-type appInfoAPI struct {
+type iAPI struct {
 	version string
 	build   string
 }
 
 // GetAppInfo returns information about current user and version of the application
-func (a appInfoAPI) GetAppInfo(w http.ResponseWriter, r *http.Request) {
-	user := api.User(r)
+func (a iAPI) GetAppInfo(w http.ResponseWriter, r *http.Request) {
+	user := context.User(r)
 	userInfo := UserInfo{
 		Username:      user.Username,
 		DisplayName:   user.DisplayName,
