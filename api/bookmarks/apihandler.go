@@ -106,7 +106,7 @@ func (app *bAPI) GetByID(w http.ResponseWriter, r *http.Request) {
 func (app *bAPI) FindByPath(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var bookmarks []store.BookmarkItem
-	path := r.URL.Query().Get("path")
+	path := r.URL.Query().Get("~p")
 	if path == "" {
 		render.Render(w, r, models.ErrBadRequest(models.BadRequestError{Request: r, Err: fmt.Errorf("no path supplied or missing query-param 'path'")}))
 		return
@@ -123,7 +123,7 @@ func (app *bAPI) FindByPath(w http.ResponseWriter, r *http.Request) {
 func (app *bAPI) FindByName(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var bookmarks []store.BookmarkItem
-	name := r.URL.Query().Get("name")
+	name := r.URL.Query().Get("~n")
 	if name == "" {
 		render.Render(w, r, models.ErrBadRequest(models.BadRequestError{Request: r, Err: fmt.Errorf("no name supplied or missing query-param 'name'")}))
 		return
