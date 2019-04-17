@@ -9,10 +9,8 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	_ "github.com/mattn/go-sqlite3" // import sqlite driver
 	"github.com/rs/xid"
-
-	// import sqlite driver
-	_ "github.com/mattn/go-sqlite3"
 )
 
 // UnitOfWork wraps the underlying database implementation
@@ -48,6 +46,12 @@ type BookmarkItem struct {
 	Username    string   `db:"user_name"`
 	Created     int32    `db:"created"`
 	Modified    int32    `db:"modified"`
+}
+
+// NodeCount represents the number of "child" elements for a given path
+type NodeCount struct {
+	Path  string
+	Count int32
 }
 
 // --------------------------------------------------------------------------
@@ -144,6 +148,32 @@ func (u *UnitOfWork) BookmarkByName(name, username string) ([]BookmarkItem, erro
 		return nil, err
 	}
 	return bookmarks, nil
+}
+
+// PathChildCount returns the number of "sub-items" for a given path
+// this implements a tree-/folder-like structure and returns the number of child components per path
+// if no child-elements are available the path is not listed
+func (u *UnitOfWork) PathChildCount() ([]NodeCount, error) {
+	var pcc []NodeCount
+	var q = `SELECT i.path as path, count(i.item_id) as count FROM bookmark_items i WHERE i.path IN (
+
+		SELECT '/' as path
+
+		UNION ALL
+
+		SELECT
+			CASE ii.path
+				WHEN '/' THEN ''
+				ELSE ii.path
+			END || '/' || ii.display_name AS path
+		FROM bookmark_items ii WHERE ii.type = 1 GROUP BY ii.path
+
+	) GROUP BY i.path;`
+
+	if err := u.db.Select(&pcc, q); err != nil {
+		return nil, err
+	}
+	return pcc, nil
 }
 
 // --------------------------------------------------------------------------

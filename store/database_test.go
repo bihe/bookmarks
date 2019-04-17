@@ -223,5 +223,106 @@ func TestDBBookmarks(t *testing.T) {
 			t.Fatalf("the path '/FOLDER1' was not fully deleted")
 		}
 	}
+}
+
+func TestDBBookmarksPathChildCount(t *testing.T) {
+	uow := setupDB()
+
+	// create the following structure
+	// /Node1
+	// /Folder1
+	// /Folder1/Node2
+	// /Folder2
+	// /Folder1/Folder3
+	//
+	// expected result
+	// /, 3
+	// /Folder1, 2
+
+	var err error
+
+	_, err = uow.CreateBookmark(store.BookmarkItem{
+		DisplayName: "Node1",
+		Path:        "/",
+		Type:        store.Node,
+		URL:         "http://url",
+		Username:    "A",
+	})
+	if err != nil {
+		t.Fatalf("cannot create bookmark item: %v", err)
+	}
+
+	_, err = uow.CreateBookmark(store.BookmarkItem{
+		DisplayName: "Folder1",
+		Path:        "/",
+		Type:        store.Folder,
+		Username:    "A",
+	})
+	if err != nil {
+		t.Fatalf("cannot create bookmark item: %v", err)
+	}
+
+	_, err = uow.CreateBookmark(store.BookmarkItem{
+		DisplayName: "Node2",
+		Path:        "/Folder1",
+		Type:        store.Node,
+		URL:         "http://url",
+		Username:    "A",
+	})
+	if err != nil {
+		t.Fatalf("cannot create bookmark item: %v", err)
+	}
+
+	_, err = uow.CreateBookmark(store.BookmarkItem{
+		DisplayName: "Folder2",
+		Path:        "/",
+		Type:        store.Folder,
+		Username:    "A",
+	})
+	if err != nil {
+		t.Fatalf("cannot create bookmark item: %v", err)
+	}
+
+	_, err = uow.CreateBookmark(store.BookmarkItem{
+		DisplayName: "Folder3",
+		Path:        "/Folder1",
+		Type:        store.Folder,
+		Username:    "A",
+	})
+	if err != nil {
+		t.Fatalf("cannot create bookmark item: %v", err)
+	}
+	var nc []store.NodeCount
+	nc, err = uow.PathChildCount()
+	if err != nil {
+		t.Fatalf("cannot get the path child count: %v", err)
+	}
+	if len(nc) == 0 {
+		t.Fatalf("no enries returned, expected 2 items!")
+	}
+
+	exp := []struct {
+		path  string
+		count int32
+	}{
+		{
+			path:  "/",
+			count: 3,
+		},
+		{
+			path:  "/Folder1",
+			count: 2,
+		},
+	}
+
+	for _, r := range exp {
+		for _, c := range nc {
+			if c.Path == r.path {
+				if c.Count != r.count {
+					t.Fatalf("Expected '%d' for path '%s' but got '%d'!", r.count, c.Path, c.Count)
+				}
+			}
+		}
+	}
 
 }

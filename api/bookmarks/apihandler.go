@@ -41,11 +41,13 @@ func MountRoutes(store *store.UnitOfWork) http.Handler {
 // --------------------------------------------------------------------------
 
 type bookmarksAPI interface {
+	GetByID(http.ResponseWriter, *http.Request)
+
 	GetAllOptions(http.ResponseWriter, *http.Request)
 	GetAll(http.ResponseWriter, *http.Request)
-	GetByID(http.ResponseWriter, *http.Request)
 	FindByPath(http.ResponseWriter, *http.Request)
 	FindByName(http.ResponseWriter, *http.Request)
+
 	Create(http.ResponseWriter, *http.Request)
 	Update(http.ResponseWriter, *http.Request)
 	Delete(http.ResponseWriter, *http.Request)
@@ -65,6 +67,43 @@ type bAPI struct {
 	policy *bluemonday.Policy
 }
 
+type result struct {
+	w http.ResponseWriter
+	r *http.Request
+}
+
+func (r *result) single(b *store.BookmarkItem, err error) {
+	if err != nil {
+		render.Render(r.w, r.r, models.ErrNotFound(models.NotFoundError{Request: r.r, Err: err}))
+		return
+	}
+	render.Render(r.w, r.r, NewBookmarkResponse(mapBookmark(*b)))
+}
+
+func (r *result) list(bs []store.BookmarkItem, err error) {
+	if err != nil {
+		render.Render(r.w, r.r, models.ErrNotFound(models.NotFoundError{Request: r.r, Err: err}))
+		return
+	}
+	render.Render(r.w, r.r, NewBookmarkListResponse(mapBookmarks(bs)))
+}
+
+// GetByID returns a single bookmark item, path param :NodeId
+func (app *bAPI) GetByID(w http.ResponseWriter, r *http.Request) {
+	rs := &result{w: w, r: r}
+
+	nodeID := chi.URLParam(r, "NodeID")
+	if nodeID == "" {
+		render.Render(w, r, models.ErrBadRequest(models.BadRequestError{Request: r, Err: fmt.Errorf("missing id to load bookmark")}))
+		return
+	}
+	rs.single(app.uow.BookmarkByID(nodeID, context.User(r).Username))
+}
+
+// --------------------------------------------------------------------------
+// return a list of bookmarks
+// --------------------------------------------------------------------------
+
 // GetAllOptions used for OPTIONS request
 func (app *bAPI) GetAllOptions(w http.ResponseWriter, r *http.Request) {
 	var err error
@@ -76,29 +115,11 @@ func (app *bAPI) GetAllOptions(w http.ResponseWriter, r *http.Request) {
 
 // GetAll retrieves the complete list of bookmarks entries from the store
 func (app *bAPI) GetAll(w http.ResponseWriter, r *http.Request) {
-	var err error
+	rs := &result{w: w, r: r}
 	var bookmarks = make([]store.BookmarkItem, 0)
-	if bookmarks, err = app.uow.AllBookmarks(context.User(r).Username); err != nil {
-		render.Render(w, r, models.ErrNotFound(models.NotFoundError{Request: r, Err: err}))
-		return
-	}
-	render.Render(w, r, NewBookmarkListResponse(mapBookmarks(bookmarks)))
-}
-
-// GetByID returns a single bookmark item, path param :NodeId
-func (app *bAPI) GetByID(w http.ResponseWriter, r *http.Request) {
-	nodeID := chi.URLParam(r, "NodeID")
-	if nodeID == "" {
-		render.Render(w, r, models.ErrBadRequest(models.BadRequestError{Request: r, Err: fmt.Errorf("missing id to load bookmark")}))
-		return
-	}
-	var item *store.BookmarkItem
 	var err error
-	if item, err = app.uow.BookmarkByID(nodeID, context.User(r).Username); err != nil {
-		render.Render(w, r, models.ErrNotFound(models.NotFoundError{Request: r, Err: err}))
-		return
-	}
-	render.Render(w, r, NewBookmarkResponse(mapBookmark(*item)))
+	bookmarks, err = app.uow.AllBookmarks(context.User(r).Username)
+	rs.list(bookmarks, err)
 }
 
 // FindByPath returns bookmarks/folders with the given path
@@ -135,6 +156,10 @@ func (app *bAPI) FindByName(w http.ResponseWriter, r *http.Request) {
 	}
 	render.Render(w, r, NewBookmarkListResponse(mapBookmarks(bookmarks)))
 }
+
+// --------------------------------------------------------------------------
+// change bookmarks
+// --------------------------------------------------------------------------
 
 // Create will save a new bookmark entry
 // the bookmark entry has a given type. If the type is Folder, the URL is just ignored and not saved
