@@ -46,6 +46,7 @@ type BookmarkItem struct {
 	Username    string   `db:"user_name"`
 	Created     int32    `db:"created"`
 	Modified    int32    `db:"modified"`
+	ChildCount  int32    `db:"child_count"`
 }
 
 // NodeCount represents the number of "child" elements for a given path
@@ -150,11 +151,26 @@ func (u *UnitOfWork) BookmarkByName(name, username string) ([]BookmarkItem, erro
 	return bookmarks, nil
 }
 
-// PathChildCount returns the number of "sub-items" for a given path
+// PathChildCount returns the number of "sub-items" for a given path (or all)
 // this implements a tree-/folder-like structure and returns the number of child components per path
 // if no child-elements are available the path is not listed
-func (u *UnitOfWork) PathChildCount() ([]NodeCount, error) {
-	var pcc []NodeCount
+func (u *UnitOfWork) PathChildCount(path, username string) ([]NodeCount, error) {
+	if path != "" {
+		path = strings.ToUpper(path)
+	}
+	return pathChildCount(path, func(q string) ([]NodeCount, error) {
+		var (
+			pcc []NodeCount
+			err error
+		)
+		if err = u.db.Select(&pcc, q, username, path); err != nil {
+			return nil, err
+		}
+		return pcc, nil
+	})
+}
+
+func pathChildCount(path string, fn func(string) ([]NodeCount, error)) ([]NodeCount, error) {
 	var q = `SELECT i.path as path, count(i.item_id) as count FROM bookmark_items i WHERE i.path IN (
 
 		SELECT '/' as path
@@ -166,14 +182,19 @@ func (u *UnitOfWork) PathChildCount() ([]NodeCount, error) {
 				WHEN '/' THEN ''
 				ELSE ii.path
 			END || '/' || ii.display_name AS path
-		FROM bookmark_items ii WHERE ii.type = 1 GROUP BY ii.path
+		FROM bookmark_items ii WHERE
+			ii.type = 1 AND ii.user_name = $1
+		GROUP BY ii.path || '/' || ii.display_name
 
-	) GROUP BY i.path;`
+	) GROUP BY i.path %s`
 
-	if err := u.db.Select(&pcc, q); err != nil {
-		return nil, err
+	if path != "" {
+		q = fmt.Sprintf(q, "HAVING upper(i.path) = $2")
+	} else {
+		q = fmt.Sprintf(q, path)
 	}
-	return pcc, nil
+
+	return fn(q)
 }
 
 // --------------------------------------------------------------------------
@@ -182,6 +203,10 @@ func (u *UnitOfWork) PathChildCount() ([]NodeCount, error) {
 
 // CreateBookmark saves a new bookmark in the store
 func (u *UnitOfWork) CreateBookmark(item BookmarkItem) (bItem *BookmarkItem, err error) {
+	var (
+		pcc []NodeCount
+	)
+
 	item.ItemID = xid.New().String()
 	tx := u.db.MustBegin()
 	defer func() {
@@ -210,6 +235,28 @@ func (u *UnitOfWork) CreateBookmark(item BookmarkItem) (bItem *BookmarkItem, err
 		bItem = nil
 		return
 	}
+
+	// the entry (either node or folder) was created with a given path. determine the number of child-elements
+	// for this given path, and update the "parent" directory entry.
+	// exception: if the path is ROOT, '/' no update needs to be done, because no dedicated ROOT, '/' entry
+	if item.Path != "/" {
+		pcc, err = pathChildCount(item.Path, func(q string) ([]NodeCount, error) {
+			var (
+				pcc []NodeCount
+				err error
+			)
+			if err = tx.Select(&pcc, q, item.Username, strings.ToUpper(item.Path)); err != nil {
+				return nil, err
+			}
+			return pcc, nil
+		})
+		if len(pcc) == 1 {
+			//count := pcc[0].Count
+			// update the parent folder
+
+		}
+	}
+
 	return &item, err
 }
 

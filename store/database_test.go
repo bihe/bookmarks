@@ -293,14 +293,10 @@ func TestDBBookmarksPathChildCount(t *testing.T) {
 		t.Fatalf("cannot create bookmark item: %v", err)
 	}
 	var nc []store.NodeCount
-	nc, err = uow.PathChildCount()
+	nc, err = uow.PathChildCount("", "A")
 	if err != nil {
 		t.Fatalf("cannot get the path child count: %v", err)
 	}
-	if len(nc) == 0 {
-		t.Fatalf("no enries returned, expected 2 items!")
-	}
-
 	exp := []struct {
 		path  string
 		count int32
@@ -319,10 +315,23 @@ func TestDBBookmarksPathChildCount(t *testing.T) {
 		for _, c := range nc {
 			if c.Path == r.path {
 				if c.Count != r.count {
-					t.Fatalf("Expected '%d' for path '%s' but got '%d'!", r.count, c.Path, c.Count)
+					t.Fatalf("expected '%d' for path '%s' but got '%d'!", r.count, c.Path, c.Count)
 				}
 			}
 		}
 	}
 
+	nc, err = uow.PathChildCount("/Folder1", "A")
+	if err != nil {
+		t.Fatalf("cannot get the path child count: %v", err)
+	}
+	if len(nc) != 1 {
+		t.Fatalf("expected one result, got %d", len(nc))
+	}
+	nci := nc[0]
+	if nci.Path == exp[1].path {
+		if nci.Count != exp[1].count {
+			t.Fatalf("expected '%d' for path '%s' but got '%d'!", exp[1].count, nci.Path, nci.Count)
+		}
+	}
 }
