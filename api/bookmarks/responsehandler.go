@@ -80,13 +80,13 @@ func handleError(w http.ResponseWriter, r *http.Request, err error) {
 	if err != nil {
 		switch err.(type) {
 		case models.NotFoundError:
-			render.Render(w, r, models.ErrNotFound(models.NotFoundError{Err: err, Request: r}))
+			render.Render(w, r, models.ErrNotFound(err.(models.NotFoundError)))
 		case models.BadRequestError:
-			render.Render(w, r, models.ErrBadRequest(models.BadRequestError{Err: err, Request: r}))
+			render.Render(w, r, models.ErrBadRequest(err.(models.BadRequestError)))
 		case models.ServerError:
-			render.Render(w, r, models.ErrServerError(models.ServerError{Err: err}))
+			render.Render(w, r, models.ErrServerError(err.(models.ServerError)))
 		default:
-			render.Render(w, r, models.ErrNotFound(models.NotFoundError{Err: err, Request: r}))
+			render.Render(w, r, models.ErrNotFound(models.NotFoundError{Request: r, Err: err}))
 		}
 	}
 }

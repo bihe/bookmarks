@@ -170,43 +170,12 @@ func (u *UnitOfWork) PathChildCount(path, username string) ([]NodeCount, error) 
 	})
 }
 
-func pathChildCount(path string, fn func(string) ([]NodeCount, error)) ([]NodeCount, error) {
-	var q = `SELECT i.path as path, count(i.item_id) as count FROM bookmark_items i WHERE i.path IN (
-
-		SELECT '/' as path
-
-		UNION ALL
-
-		SELECT
-			CASE ii.path
-				WHEN '/' THEN ''
-				ELSE ii.path
-			END || '/' || ii.display_name AS path
-		FROM bookmark_items ii WHERE
-			ii.type = 1 AND ii.user_name = $1
-		GROUP BY ii.path || '/' || ii.display_name
-
-	) GROUP BY i.path %s`
-
-	if path != "" {
-		q = fmt.Sprintf(q, "HAVING upper(i.path) = $2")
-	} else {
-		q = fmt.Sprintf(q, path)
-	}
-
-	return fn(q)
-}
-
 // --------------------------------------------------------------------------
 // TRANSACTIONAL METHODS
 // --------------------------------------------------------------------------
 
 // CreateBookmark saves a new bookmark in the store
 func (u *UnitOfWork) CreateBookmark(item BookmarkItem) (bItem *BookmarkItem, err error) {
-	var (
-		pcc []NodeCount
-	)
-
 	item.ItemID = xid.New().String()
 	tx := u.db.MustBegin()
 	defer func() {
@@ -240,20 +209,8 @@ func (u *UnitOfWork) CreateBookmark(item BookmarkItem) (bItem *BookmarkItem, err
 	// for this given path, and update the "parent" directory entry.
 	// exception: if the path is ROOT, '/' no update needs to be done, because no dedicated ROOT, '/' entry
 	if item.Path != "/" {
-		pcc, err = pathChildCount(item.Path, func(q string) ([]NodeCount, error) {
-			var (
-				pcc []NodeCount
-				err error
-			)
-			if err = tx.Select(&pcc, q, item.Username, strings.ToUpper(item.Path)); err != nil {
-				return nil, err
-			}
-			return pcc, nil
-		})
-		if len(pcc) == 1 {
-			//count := pcc[0].Count
-			// update the parent folder
-
+		if err = updateChildCount(item.Path, item.Username, tx); err != nil {
+			return nil, err
 		}
 	}
 
@@ -319,6 +276,12 @@ func (u *UnitOfWork) Delete(itemID, username string) (err error) {
 		}
 	}()
 
+	var item BookmarkItem
+	if err = tx.Get(&item, "SELECT * FROM bookmark_items WHERE user_name=? AND item_id=?", username, itemID); err != nil {
+		err = fmt.Errorf("could not get bookmark by ID:'%s': %v", itemID, err)
+		return
+	}
+
 	var r sql.Result
 	if r, err = tx.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND item_id = ?", username, itemID); err != nil {
 		err = fmt.Errorf("cannot delete bookmark with ID: %s; error: %v", itemID, err)
@@ -336,6 +299,16 @@ func (u *UnitOfWork) Delete(itemID, username string) (err error) {
 		err = fmt.Errorf("no items were deleted")
 		return
 	}
+
+	// the deleted entry (either node or folder) had a given path. determine the number of child-elements
+	// for this given path, and update the "parent" directory entry.
+	// exception: if the path is ROOT, '/' no update needs to be done, because no dedicated ROOT, '/' entry
+	if item.Path != "/" {
+		if err = updateChildCount(item.Path, item.Username, tx); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -378,10 +351,6 @@ func (u *UnitOfWork) DeletePath(path, username string) (err error) {
 		err = fmt.Errorf("no items were deleted for path '%s': %v", path, err)
 		return
 	}
-	if c == 0 {
-		err = fmt.Errorf("could not delete item for path '%s' and Username '%s'", path, username)
-		return
-	}
 
 	// it is also necessary to delete the folder with the given name
 	// e.g. if the supplied path is /A/B then we need to delete /A/B*
@@ -391,12 +360,17 @@ func (u *UnitOfWork) DeletePath(path, username string) (err error) {
 		err = fmt.Errorf("not a valid path, no path seperator '/' found")
 		return
 	}
+
 	n := path[i+1:]
+	parent := path[:i]
+	if i == 0 {
+		parent = "/"
+	}
+
 	if r, err = tx.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND display_name = ? AND type = ?", username, n, Folder); err != nil {
 		err = fmt.Errorf("cannot delete item for path: '%s'; error: %v", n, err)
 		return
 	}
-
 	c, err = r.RowsAffected()
 	if err != nil {
 		err = fmt.Errorf("cannot delete items for path '%s': %v", n, err)
@@ -407,12 +381,98 @@ func (u *UnitOfWork) DeletePath(path, username string) (err error) {
 		err = fmt.Errorf("could not delete item for path '%s' and Username '%s'", n, username)
 		return
 	}
+	// the deleted entry (either node or folder) had a given path. determine the number of child-elements
+	// for this given path, and update the "parent" directory entry.
+	// exception: if the path is ROOT, '/' no update needs to be done, because no dedicated ROOT, '/' entry
+	if parent != "/" {
+		if err = updateChildCount(parent, username, tx); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 // --------------------------------------------------------------------------
 // HELPER METHODS
 // --------------------------------------------------------------------------
+
+// determine the child-count of a given path (e.g. /a/b) and update the
+// entry ChildCount in the specific directory
+func updateChildCount(path, username string, tx *sqlx.Tx) error {
+	var (
+		pcc []NodeCount
+		err error
+	)
+
+	pcc, err = pathChildCount(path, func(q string) ([]NodeCount, error) {
+		var (
+			pcc []NodeCount
+			err error
+		)
+		if err = tx.Select(&pcc, q, username, strings.ToUpper(path)); err != nil {
+			return nil, err
+		}
+		return pcc, nil
+	})
+
+	var pcount int32
+	var ppath string
+
+	if len(pcc) == 1 {
+		pcount = pcc[0].Count
+		ppath = pcc[0].Path
+	} else {
+		pcount = 0
+		ppath = path
+	}
+
+	// update the parent folder
+	path, name := getPathAndFolder(ppath)
+	var p BookmarkItem
+	if err := tx.Get(&p, "SELECT * FROM bookmark_items WHERE user_name = ? AND path=? AND type=? AND display_name=?", username, path, Folder, name); err != nil {
+		return fmt.Errorf("could not get bookmark Folder for path '%s' and name '%s': %v", path, name, err)
+	}
+	if _, err = tx.NamedExec("UPDATE bookmark_items SET child_count=:child_count,modified=:modified WHERE item_id=:item_id AND user_name=:user_name", &BookmarkItem{
+		ItemID:     p.ItemID,
+		Username:   username,
+		ChildCount: pcount,
+		Modified:   int32(time.Now().Unix()),
+	}); err != nil {
+		err = fmt.Errorf("could not update bookmark: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// get the number of child-elements for a given path /a/b/c
+func pathChildCount(path string, fn func(string) ([]NodeCount, error)) ([]NodeCount, error) {
+	var q = `SELECT i.path as path, count(i.item_id) as count FROM bookmark_items i WHERE i.path IN (
+
+		SELECT '/' as path
+
+		UNION ALL
+
+		SELECT
+			CASE ii.path
+				WHEN '/' THEN ''
+				ELSE ii.path
+			END || '/' || ii.display_name AS path
+		FROM bookmark_items ii WHERE
+			ii.type = 1 AND ii.user_name = $1
+		GROUP BY ii.path || '/' || ii.display_name
+
+	) GROUP BY i.path %s`
+
+	if path != "" {
+		q = fmt.Sprintf(q, "HAVING upper(i.path) = $2")
+	} else {
+		q = fmt.Sprintf(q, path)
+	}
+
+	return fn(q)
+}
 
 // InitSchema sets the sqlite database schema
 func (u *UnitOfWork) InitSchema(ddlFilePath string) error {
@@ -424,4 +484,16 @@ func (u *UnitOfWork) InitSchema(ddlFilePath string) error {
 		return fmt.Errorf("cannot created db schema from file '%s': %v", ddlFilePath, err)
 	}
 	return nil
+}
+
+// deconstructs a given fullpath to a path and folder (eq name) element
+// /a/b/c --> path: /a/b name: c
+func getPathAndFolder(p string) (string, string) {
+	i := strings.LastIndex(p, "/")
+	path := p[:i]
+	if i == 0 && path == "" {
+		path = "/"
+	}
+	name := p[i+1:]
+	return path, name
 }

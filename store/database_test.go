@@ -81,7 +81,7 @@ func TestDBBookmarks(t *testing.T) {
 	// create another bookmark
 	_, err = uow.CreateBookmark(store.BookmarkItem{
 		DisplayName: "b",
-		Path:        "/path",
+		Path:        "/",
 		Type:        store.Node,
 		URL:         "http://url",
 		Username:    "A",
@@ -96,16 +96,8 @@ func TestDBBookmarks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot get bookmark by path /: %v", err)
 	}
-	if len(blist) != 1 {
-		t.Fatalf("1 bookmarks should be returned by path /, got %d", len(blist))
-	}
-
-	blist, err = uow.BookmarkByPath("/path", "A")
-	if err != nil {
-		t.Fatalf("cannot get bookmark by path /path: %v", err)
-	}
-	if len(blist) != 1 {
-		t.Fatalf("1 bookmarks should be returned by path /path, got %d", len(blist))
+	if len(blist) != 2 {
+		t.Fatalf("2 bookmarks should be returned by path /, got %d", len(blist))
 	}
 
 	// search for bookmarks
@@ -261,8 +253,8 @@ func TestDBBookmarksPathChildCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot create bookmark item: %v", err)
 	}
-
-	_, err = uow.CreateBookmark(store.BookmarkItem{
+	var node2 *store.BookmarkItem
+	node2, err = uow.CreateBookmark(store.BookmarkItem{
 		DisplayName: "Node2",
 		Path:        "/Folder1",
 		Type:        store.Node,
@@ -333,5 +325,41 @@ func TestDBBookmarksPathChildCount(t *testing.T) {
 		if nci.Count != exp[1].count {
 			t.Fatalf("expected '%d' for path '%s' but got '%d'!", exp[1].count, nci.Path, nci.Count)
 		}
+	}
+	var b *store.BookmarkItem
+	b, err = uow.FolderByPathName("/", "Folder1", "A")
+	if err != nil {
+		t.Fatalf("cannot get the folder /Folder1: %v", err)
+	}
+	if b.ChildCount != exp[1].count {
+		t.Fatalf("expected '%d' for path '%s' but got '%d'!", exp[1].count, nci.Path, nci.Count)
+	}
+
+	// delete a node and see how this affects the child-count
+	err = uow.Delete(node2.ItemID, "A")
+	if err != nil {
+		t.Fatalf("could not delete /Folder1/Node2: %v", err)
+	}
+
+	b, err = uow.FolderByPathName("/", "Folder1", "A")
+	if err != nil {
+		t.Fatalf("cannot get the folder /Folder1: %v", err)
+	}
+	if b.ChildCount != 1 {
+		t.Fatalf("expected '%d' for path '%s' but got '%d'!", 1, "Folder1", b.ChildCount)
+	}
+
+	// delete a node and see how this affects the child-count
+	err = uow.DeletePath("/Folder1/Folder3", "A")
+	if err != nil {
+		t.Fatalf("could not delete /Folder1/Folder3: %v", err)
+	}
+
+	b, err = uow.FolderByPathName("/", "Folder1", "A")
+	if err != nil {
+		t.Fatalf("cannot get the folder /Folder1: %v", err)
+	}
+	if b.ChildCount != 0 {
+		t.Fatalf("expected '%d' for path '%s' but got '%d'!", 0, "Folder1", b.ChildCount)
 	}
 }
