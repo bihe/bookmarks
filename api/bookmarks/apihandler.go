@@ -344,6 +344,7 @@ func mapBookmark(item store.BookmarkItem) Bookmark {
 		Modified:    item.Modified,
 		Created:     item.Created,
 		UserName:    item.Username,
+		ChildCount:  item.ChildCount,
 	}
 }
 

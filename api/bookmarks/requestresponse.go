@@ -31,6 +31,7 @@ type Bookmark struct {
 	Created     int32  `json:"created"`
 	Modified    int32  `json:"modified"`
 	UserName    string `json:"username"`
+	ChildCount  int32  `json:"childCount"`
 }
 
 var invalCharsDisplayName = []string{"/", "?", "\\", "\"", "<", ">", "#", "%", "{", "}", "|", "\\", "^", "~", "`", ";", "@", ":", "=", "&"}
