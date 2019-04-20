@@ -355,16 +355,9 @@ func (u *UnitOfWork) DeletePath(path, username string) (err error) {
 	// it is also necessary to delete the folder with the given name
 	// e.g. if the supplied path is /A/B then we need to delete /A/B*
 	// but also delete the item Path /A, DisplayName B, Type Folder
-	i := strings.LastIndex(path, "/")
-	if i == -1 {
-		err = fmt.Errorf("not a valid path, no path seperator '/' found")
-		return
-	}
-
-	n := path[i+1:]
-	parent := path[:i]
-	if i == 0 {
-		parent = "/"
+	parent, n, err := pathAndFolder(path)
+	if err != nil {
+		return err
 	}
 
 	if r, err = tx.Exec("DELETE FROM bookmark_items WHERE user_name = ? AND display_name = ? AND type = ?", username, n, Folder); err != nil {
@@ -400,43 +393,39 @@ func (u *UnitOfWork) DeletePath(path, username string) (err error) {
 // determine the child-count of a given path (e.g. /a/b) and update the
 // entry ChildCount in the specific directory
 func updateChildCount(path, username string, tx *sqlx.Tx) error {
-	var (
-		pcc []NodeCount
-		err error
-	)
-
-	pcc, err = pathChildCount(path, func(q string) ([]NodeCount, error) {
+	childs, err := pathChildCount(path, func(q string) ([]NodeCount, error) {
 		var (
-			pcc []NodeCount
-			err error
+			childC []NodeCount
+			e      error
 		)
-		if err = tx.Select(&pcc, q, username, strings.ToUpper(path)); err != nil {
-			return nil, err
+		if e = tx.Select(&childC, q, username, strings.ToUpper(path)); e != nil {
+			return nil, e
 		}
-		return pcc, nil
+		return childC, nil
 	})
 
-	var pcount int32
-	var ppath string
+	var pathCount int32
+	var parentPath = path
 
-	if len(pcc) == 1 {
-		pcount = pcc[0].Count
-		ppath = pcc[0].Path
-	} else {
-		pcount = 0
-		ppath = path
+	if len(childs) == 1 {
+		pathCount = childs[0].Count
+		parentPath = childs[0].Path
 	}
 
 	// update the parent folder
-	path, name := getPathAndFolder(ppath)
+	path, name, err := pathAndFolder(parentPath)
+	if err != nil {
+		return err
+	}
 	var p BookmarkItem
 	if err := tx.Get(&p, "SELECT * FROM bookmark_items WHERE user_name = ? AND path=? AND type=? AND display_name=?", username, path, Folder, name); err != nil {
 		return fmt.Errorf("could not get bookmark Folder for path '%s' and name '%s': %v", path, name, err)
 	}
+
 	if _, err = tx.NamedExec("UPDATE bookmark_items SET child_count=:child_count,modified=:modified WHERE item_id=:item_id AND user_name=:user_name", &BookmarkItem{
 		ItemID:     p.ItemID,
 		Username:   username,
-		ChildCount: pcount,
+		ChildCount: pathCount,
 		Modified:   int32(time.Now().Unix()),
 	}); err != nil {
 		err = fmt.Errorf("could not update bookmark: %v", err)
@@ -488,12 +477,16 @@ func (u *UnitOfWork) InitSchema(ddlFilePath string) error {
 
 // deconstructs a given fullpath to a path and folder (eq name) element
 // /a/b/c --> path: /a/b name: c
-func getPathAndFolder(p string) (string, string) {
+func pathAndFolder(p string) (string, string, error) {
 	i := strings.LastIndex(p, "/")
+	if i == -1 {
+		err := fmt.Errorf("not a valid path, no path seperator '/' found")
+		return "", "", err
+	}
 	path := p[:i]
 	if i == 0 && path == "" {
 		path = "/"
 	}
 	name := p[i+1:]
-	return path, name
+	return path, name, nil
 }
