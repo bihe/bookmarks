@@ -463,18 +463,6 @@ func pathChildCount(path string, fn func(string) ([]NodeCount, error)) ([]NodeCo
 	return fn(q)
 }
 
-// InitSchema sets the sqlite database schema
-func (u *UnitOfWork) InitSchema(ddlFilePath string) error {
-	c, err := ioutil.ReadFile(ddlFilePath)
-	if err != nil {
-		return fmt.Errorf("could not read ddl.sql file: %v", err)
-	}
-	if _, err := u.db.Exec(string(c)); err != nil {
-		return fmt.Errorf("cannot created db schema from file '%s': %v", ddlFilePath, err)
-	}
-	return nil
-}
-
 // deconstructs a given fullpath to a path and folder (eq name) element
 // /a/b/c --> path: /a/b name: c
 func pathAndFolder(p string) (string, string, error) {
@@ -489,4 +477,16 @@ func pathAndFolder(p string) (string, string, error) {
 	}
 	name := p[i+1:]
 	return path, name, nil
+}
+
+// InitSchema sets the sqlite database schema
+func (u *UnitOfWork) InitSchema(ddlFilePath string) error {
+	c, err := ioutil.ReadFile(ddlFilePath)
+	if err != nil {
+		return fmt.Errorf("could not read ddl.sql file: %v", err)
+	}
+	if _, err := u.db.Exec(string(c)); err != nil {
+		return fmt.Errorf("cannot created db schema from file '%s': %v", ddlFilePath, err)
+	}
+	return nil
 }
