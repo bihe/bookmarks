@@ -25,6 +25,7 @@ func MountRoutes(store *store.UnitOfWork) http.Handler {
 	r := chi.NewRouter()
 	r.Options("/", check(b.GetAllOptions))
 	r.Get("/", list(b.GetAll))
+	r.Get("/tree", tree(b.GetTree))
 	r.Post("/", created(b.Create))
 	r.Put("/", ok(b.Update))
 	r.Get("/{NodeID}", single(b.GetByID))
@@ -40,11 +41,62 @@ func MountRoutes(store *store.UnitOfWork) http.Handler {
 // Bookmark API
 // --------------------------------------------------------------------------
 
+const (
+	// Node is a single bookmark entry
+	Node string = "node"
+	// Folder is a grouping/hierarchy structure to hold bookmarks
+	Folder string = "folder"
+)
+
+// Bookmark is the view-model returned by the API
+type Bookmark struct {
+	Path        string `json:"path"`
+	DisplayName string `json:"displayName"`
+	URL         string `json:"url"`
+	NodeID      string `json:"nodeId,omitempty"`
+	SortOrder   uint8  `json:"sortOrder"`
+	Type        string `json:"type"`
+	Created     int32  `json:"created"`
+	Modified    int32  `json:"modified"`
+	UserName    string `json:"username"`
+	ChildCount  int32  `json:"childCount"`
+}
+
+var invalCharsDisplayName = []string{"/", "?", "\\", "\"", "<", ">", "#", "%", "{", "}", "|", "\\", "^", "~", "`", ";", "@", ":", "=", "&"}
+
+// Validate the bookmark object based on required fields
+func (b Bookmark) Validate() error {
+	if b.Path == "" {
+		return fmt.Errorf("cannot use an empty path")
+	}
+	if strings.HasSuffix(b.Path, "/") && b.Path != "/" {
+		return fmt.Errorf("a path cannot end with '/")
+	}
+	if b.Type == Node && b.URL == "" {
+		return fmt.Errorf("a bookmarks needs an URL")
+	}
+	for _, c := range invalCharsDisplayName {
+		if strings.ContainsAny(b.DisplayName, c) {
+			return fmt.Errorf("invalid chars in 'DisplayName'")
+		}
+	}
+	return nil
+}
+
+// BookmarkTree is used to model all bookmarks as an recursive tree
+type BookmarkTree struct {
+	DisplayName string         `json:"displayName"`
+	Type        string         `json:"type"`
+	URL         string         `json:"url,omitempty"`
+	Children    []BookmarkTree `json:"children,omitempty"`
+}
+
 type bookmarksAPI interface {
 	GetByID(http.ResponseWriter, *http.Request) (*Bookmark, error)
 
 	GetAllOptions(http.ResponseWriter, *http.Request) error
 	GetAll(http.ResponseWriter, *http.Request) ([]Bookmark, error)
+	GetTree(http.ResponseWriter, *http.Request) (*BookmarkTree, error)
 	FindByPath(http.ResponseWriter, *http.Request) ([]Bookmark, error)
 	FindByName(http.ResponseWriter, *http.Request) ([]Bookmark, error)
 
@@ -103,6 +155,26 @@ func (app *bAPI) GetAll(w http.ResponseWriter, r *http.Request) ([]Bookmark, err
 		return nil, models.NotFoundError{Request: r, Err: err}
 	}
 	return mapBookmarks(bookmarks), nil
+}
+
+// GetTree retrieves the complete list of bookmarks entries and formats them as a tree-structure
+func (app *bAPI) GetTree(w http.ResponseWriter, r *http.Request) (*BookmarkTree, error) {
+	var (
+		//bookmarks = make([]store.BookmarkItem, 0)
+		err error
+	)
+	if _, err = app.uow.AllBookmarks(context.User(r).Username); err != nil {
+		return nil, models.NotFoundError{Request: r, Err: err}
+	}
+
+	// TODO: __Master__recursive_function to convert the flat list of bookmarks into a tree
+	// structure
+
+	sub := BookmarkTree{DisplayName: "test1", Type: "node", URL: "http://www.orf.at"}
+	childs := make([]BookmarkTree, 0)
+	childs = append(childs, sub)
+
+	return &BookmarkTree{DisplayName: "test", Type: "folder", Children: childs}, nil
 }
 
 // FindByPath returns bookmarks/folders with the given path

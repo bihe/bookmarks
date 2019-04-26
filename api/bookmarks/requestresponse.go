@@ -2,58 +2,11 @@ package bookmarks
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
-	"strings"
 
+	"github.com/bihe/bookmarks/api/models"
 	"github.com/go-chi/render"
 )
-
-// --------------------------------------------------------------------------
-// define API request / response structures
-// --------------------------------------------------------------------------
-
-const (
-	// Node is a single bookmark entry
-	Node string = "node"
-	// Folder is a grouping/hierarchy structure to hold bookmarks
-	Folder string = "folder"
-)
-
-// Bookmark is the view-model returned by the API
-type Bookmark struct {
-	Path        string `json:"path"`
-	DisplayName string `json:"displayName"`
-	URL         string `json:"url"`
-	NodeID      string `json:"nodeId,omitempty"`
-	SortOrder   uint8  `json:"sortOrder"`
-	Type        string `json:"type"`
-	Created     int32  `json:"created"`
-	Modified    int32  `json:"modified"`
-	UserName    string `json:"username"`
-	ChildCount  int32  `json:"childCount"`
-}
-
-var invalCharsDisplayName = []string{"/", "?", "\\", "\"", "<", ">", "#", "%", "{", "}", "|", "\\", "^", "~", "`", ";", "@", ":", "=", "&"}
-
-// Validate the bookmark object based on required fields
-func (b Bookmark) Validate() error {
-	if b.Path == "" {
-		return fmt.Errorf("cannot use an empty path")
-	}
-	if strings.HasSuffix(b.Path, "/") && b.Path != "/" {
-		return fmt.Errorf("a path cannot end with '/")
-	}
-	if b.Type == Node && b.URL == "" {
-		return fmt.Errorf("a bookmarks needs an URL")
-	}
-	for _, c := range invalCharsDisplayName {
-		if strings.ContainsAny(b.DisplayName, c) {
-			return fmt.Errorf("invalid chars in 'DisplayName'")
-		}
-	}
-	return nil
-}
 
 // --------------------------------------------------------------------------
 // BookmarkRequest
@@ -150,4 +103,123 @@ func NewBookmarkListResponse(bookmarks []Bookmark) BookmarkListResponse {
 	}
 	resp := BookmarkListResponse{Count: len(list), List: list}
 	return resp
+}
+
+// --------------------------------------------------------------------------
+// BookmarkTreeResponse
+// --------------------------------------------------------------------------
+
+// BookmarkTreeResponse is used to return the whole bookmar tree
+type BookmarkTreeResponse struct {
+	*BookmarkTree
+}
+
+// NewBookmarkTreeResponse creates the response object needed for render
+func NewBookmarkTreeResponse(tree BookmarkTree) BookmarkTreeResponse {
+	resp := BookmarkTreeResponse{BookmarkTree: &tree}
+	return resp
+}
+
+// Render the specific response
+func (b BookmarkTreeResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	// Pre-processing before a response is marshalled and sent across the wire
+	return nil
+}
+
+// --------------------------------------------------------------------------
+// handlers which take care of setting the correct result and/or error
+// --------------------------------------------------------------------------
+
+func list(f func(http.ResponseWriter, *http.Request) ([]Bookmark, error)) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var (
+			bs  []Bookmark
+			err error
+		)
+		if bs, err = f(w, r); err != nil {
+			handleError(w, r, err)
+			return
+		}
+		render.Render(w, r, NewBookmarkListResponse(bs))
+	})
+}
+
+func single(f func(http.ResponseWriter, *http.Request) (*Bookmark, error)) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var (
+			b   *Bookmark
+			err error
+		)
+		if b, err = f(w, r); err != nil {
+			handleError(w, r, err)
+			return
+		}
+		render.Render(w, r, NewBookmarkResponse(*b))
+	})
+}
+
+func tree(f func(http.ResponseWriter, *http.Request) (*BookmarkTree, error)) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var (
+			b   *BookmarkTree
+			err error
+		)
+		if b, err = f(w, r); err != nil {
+			handleError(w, r, err)
+			return
+		}
+		render.Render(w, r, NewBookmarkTreeResponse(*b))
+	})
+}
+
+func ok(f func(http.ResponseWriter, *http.Request) (string, error)) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var (
+			result string
+			err    error
+		)
+		if result, err = f(w, r); err != nil {
+			handleError(w, r, err)
+			return
+		}
+		render.Render(w, r, models.SuccessResult(http.StatusOK, result))
+	})
+}
+
+func created(f func(http.ResponseWriter, *http.Request) (string, string, error)) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var (
+			result string
+			id     string
+			err    error
+		)
+		if result, id, err = f(w, r); err != nil {
+			handleError(w, r, err)
+			return
+		}
+		render.Render(w, r, NewBookmarkCreatedResponse(http.StatusCreated, result, id))
+	})
+}
+
+func check(f func(http.ResponseWriter, *http.Request) error) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := f(w, r); err != nil {
+			handleError(w, r, err)
+		}
+	})
+}
+
+func handleError(w http.ResponseWriter, r *http.Request, err error) {
+	if err != nil {
+		switch err.(type) {
+		case models.NotFoundError:
+			render.Render(w, r, models.ErrNotFound(err.(models.NotFoundError)))
+		case models.BadRequestError:
+			render.Render(w, r, models.ErrBadRequest(err.(models.BadRequestError)))
+		case models.ServerError:
+			render.Render(w, r, models.ErrServerError(err.(models.ServerError)))
+		default:
+			render.Render(w, r, models.ErrNotFound(models.NotFoundError{Request: r, Err: err}))
+		}
+	}
 }
