@@ -16,17 +16,16 @@
         "dialect": "sqlite3"
     },
     "logging": {
-        "logPrefix": "prefix",
-        "rollingFileLogger": {
-            "filePath": "/temp/file",
-            "maxFileSize": 100,
-            "numberOfMaxBackups": 4,
-            "maxAge": 7,
-            "compressFile": false
-        }
+        "filePath": "./logs/bookmarks-api.log",
+        "requestPath": "./logs/requests.log",
+        "logLevel": "debug"
     },
-    "fileServer": {
-	    "path": "/tmp",
-	    "urlPath": "/ui"
-    }
+    "cookies": {
+        "domain": "localhost",
+        "path": "/",
+        "secure": false,
+        "prefix": "login"
+    },
+    "startUrl": "/ui",
+    "environment": "Development"
 }
