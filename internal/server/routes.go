@@ -33,7 +33,7 @@ func (s *Server) routes() {
 
 		// group API methods together
 		r.Route("/api/v1", func(r chi.Router) {
-			// r.Get("/appinfo", s.api.Secure(s.api.HandleAppInfo))
+			r.Get("/appinfo", s.api.Secure(s.api.HandleAppInfo))
 			// r.Get("/sites", s.api.Secure(s.api.HandleGetSites))
 			// r.Post("/sites", s.api.Secure(s.api.HandleSaveSites))
 			// r.Get("/sites/users/{siteName}", s.api.Secure((s.api.HandleGetUsersForSite)))

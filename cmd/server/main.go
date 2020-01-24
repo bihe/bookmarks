@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bihe/bookmarks/internal"
 	"github.com/bihe/bookmarks/internal/config"
 	"github.com/bihe/bookmarks/internal/server"
 	"github.com/wangii/emoji"
@@ -33,30 +34,31 @@ func main() {
 
 // run configures and starts the Server
 func run() (err error) {
-	v := config.VersionInfo{
+	version := internal.VersionInfo{
 		Version: Version,
 		Build:   Build,
 	}
 
 	args := parseFlags()
 	appConfig := configFromFile(args.ConfigFile)
+	apiSrv := server.Create(args.BasePath, appConfig, version)
 
-	apiSrv := server.Create(args.BasePath, appConfig, v)
 	setupLog(appConfig)
 	log.SetLevel(log.DebugLevel)
 	addr := fmt.Sprintf("%s:%d", args.HostName, args.Port)
-	srv := &http.Server{Addr: addr, Handler: apiSrv.Handler()}
+	httpSrv := &http.Server{Addr: addr, Handler: apiSrv}
 
 	go func() {
 		fmt.Printf("%s Starting server ...\n", emoji.EmojiTagToUnicode(`:rocket:`))
-		fmt.Printf("%s Listening on '%s'\n", emoji.EmojiTagToUnicode(`:computer:`), srv.Addr)
+		fmt.Printf("%s Listening on '%s'\n", emoji.EmojiTagToUnicode(`:computer:`), httpSrv.Addr)
 		fmt.Printf("%s Version: '%s-%s'\n", emoji.EmojiTagToUnicode(`:bookmark:`), Version, Build)
 		fmt.Printf("%s Ready!\n", emoji.EmojiTagToUnicode(`:checkered_flag:`))
-		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+
+		if err := httpSrv.ListenAndServe(); err != http.ErrServerClosed {
 			return
 		}
 	}()
-	return graceful(srv, 5*time.Second)
+	return graceful(httpSrv, 5*time.Second)
 }
 
 func graceful(s *http.Server, timeout time.Duration) error {

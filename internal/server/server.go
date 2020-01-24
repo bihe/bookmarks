@@ -12,37 +12,37 @@ import (
 	"github.com/bihe/commons-go/cookies"
 	"github.com/bihe/commons-go/security"
 
+	"github.com/bihe/bookmarks/internal"
 	"github.com/bihe/bookmarks/internal/config"
+	"github.com/bihe/bookmarks/internal/server/api"
 	"github.com/go-chi/chi"
 )
 
 // Server struct defines the basic layout of a HTTP API server
 type Server struct {
-	router chi.Router
-
-	// settings and configuration
+	router         chi.Router
 	basePath       string
-	cookieSettings cookies.Settings
 	jwtOpts        security.JwtOptions
-
-	//api    api.Login
+	cookieSettings cookies.Settings
+	api            api.Bookmarks
 }
 
 // Create instantiates a new Server instance
-func Create(basePath string, config config.AppConfig, version config.VersionInfo) *Server {
+func Create(basePath string, config config.AppConfig, version internal.VersionInfo) *Server {
 	base, err := filepath.Abs(basePath)
 	if err != nil {
 		panic(fmt.Sprintf("cannot resolve basepath '%s', %v", basePath, err))
 	}
 
+	cookieSettings := cookies.Settings{
+		Path:   config.Cookies.Path,
+		Domain: config.Cookies.Domain,
+		Secure: config.Cookies.Secure,
+		Prefix: config.Cookies.Prefix,
+	}
+
 	srv := Server{
 		basePath: base,
-		cookieSettings: cookies.Settings{
-			Path:   config.Cookies.Path,
-			Domain: config.Cookies.Domain,
-			Secure: config.Cookies.Secure,
-			Prefix: config.Cookies.Prefix,
-		},
 		jwtOpts: security.JwtOptions{
 			JwtSecret:  config.Sec.JwtSecret,
 			JwtIssuer:  config.Sec.JwtIssuer,
@@ -55,15 +55,16 @@ func Create(basePath string, config config.AppConfig, version config.VersionInfo
 			RedirectURL:   config.Sec.LoginRedirect,
 			CacheDuration: config.Sec.CacheDuration,
 		},
-		//api:            api.New(base, cookieSettings, version, config.OIDC, config.Sec, repo),
+		cookieSettings: cookieSettings,
+		api:            api.NewBookmarksAPI(cookieSettings, version),
 	}
 	srv.routes()
 	return &srv
 }
 
-// Handler returns the used router
-func (s *Server) Handler() chi.Router {
-	return s.router
+// ServeHTTP turns the server into a http.Handler
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.router.ServeHTTP(w, r)
 }
 
 // --------------------------------------------------------------------------
