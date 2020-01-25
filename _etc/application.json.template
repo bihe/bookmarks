@@ -26,6 +26,7 @@
         "secure": false,
         "prefix": "login"
     },
+    "errorPath": "error",
     "startUrl": "/ui",
     "environment": "Development"
 }

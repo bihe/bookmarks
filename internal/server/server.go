@@ -3,19 +3,21 @@ package server
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
-	"strings"
 
 	"github.com/bihe/commons-go/cookies"
+	"github.com/bihe/commons-go/errors"
+	"github.com/bihe/commons-go/handler"
 	"github.com/bihe/commons-go/security"
 
 	"github.com/bihe/bookmarks/internal"
 	"github.com/bihe/bookmarks/internal/config"
-	"github.com/bihe/bookmarks/internal/server/api"
+	"github.com/bihe/bookmarks/internal/server/html"
 	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 )
 
 // Server struct defines the basic layout of a HTTP API server
@@ -24,14 +26,24 @@ type Server struct {
 	basePath       string
 	jwtOpts        security.JwtOptions
 	cookieSettings cookies.Settings
-	api            api.Bookmarks
+
+	logConfig   config.LogConfig
+	environment string
+
+	errorHandler *html.TemplateHandler
+	appInfoAPI   *handler.AppInfoHandler
 }
 
 // Create instantiates a new Server instance
-func Create(basePath string, config config.AppConfig, version internal.VersionInfo) *Server {
+func Create(basePath string, config config.AppConfig, version internal.VersionInfo, environment string) *Server {
 	base, err := filepath.Abs(basePath)
 	if err != nil {
 		panic(fmt.Sprintf("cannot resolve basepath '%s', %v", basePath, err))
+	}
+
+	env := config.Environment
+	if environment != "" {
+		env = environment
 	}
 
 	cookieSettings := cookies.Settings{
@@ -39,6 +51,23 @@ func Create(basePath string, config config.AppConfig, version internal.VersionIn
 		Domain: config.Cookies.Domain,
 		Secure: config.Cookies.Secure,
 		Prefix: config.Cookies.Prefix,
+	}
+	errorReporter := errors.NewReporter(cookieSettings, config.ErrorPath)
+	baseHandler := handler.Handler{
+		ErrRep: errorReporter,
+	}
+
+	appInfo := &handler.AppInfoHandler{
+		Handler: baseHandler,
+		Version: version.Version,
+		Build:   version.Build,
+	}
+	errHandler := &html.TemplateHandler{
+		Handler:        baseHandler,
+		Version:        version.Version,
+		Build:          version.Build,
+		CookieSettings: cookieSettings,
+		BasePath:       basePath,
 	}
 
 	srv := Server{
@@ -54,9 +83,13 @@ func Create(basePath string, config config.AppConfig, version internal.VersionIn
 			},
 			RedirectURL:   config.Sec.LoginRedirect,
 			CacheDuration: config.Sec.CacheDuration,
+			ErrorPath:     config.ErrorPath,
 		},
 		cookieSettings: cookieSettings,
-		api:            api.NewBookmarksAPI(cookieSettings, version),
+		logConfig:      config.Log,
+		environment:    env,
+		appInfoAPI:     appInfo,
+		errorHandler:   errHandler,
 	}
 	srv.routes()
 	return &srv
@@ -67,51 +100,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.router.ServeHTTP(w, r)
 }
 
-// --------------------------------------------------------------------------
-// internal logic / helpers
-// --------------------------------------------------------------------------
+// use the go-chi logger middleware and redirect request logging to a file
+func (s *Server) setupRequestLogging() {
 
-func serveStaticDir(r chi.Router, public string, static http.Dir) {
-	if strings.ContainsAny(public, "{}*") {
-		panic("FileServer does not permit URL parameters.")
-	}
-
-	root, _ := filepath.Abs(string(static))
-	if _, err := os.Stat(root); os.IsNotExist(err) {
-		panic("Static Documents Directory Not Found")
-	}
-
-	fs := http.StripPrefix(public, http.FileServer(http.Dir(root)))
-
-	r.Get(public+"*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		file := strings.Replace(r.RequestURI, public, "", 1)
-		// if the file contains URL params, remove everything after ?
-		if strings.Contains(file, "?") {
-			parts := strings.Split(file, "?")
-			if len(parts) == 2 {
-				file = parts[0] // use everything before the ?
-			}
+	if s.environment != "Development" {
+		var file *os.File
+		file, err := os.OpenFile(s.logConfig.RequestPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			panic(fmt.Sprintf("cannot use filepath '%s' as a logfile: %v", s.logConfig.RequestPath, err))
 		}
-		if _, err := os.Stat(root + file); os.IsNotExist(err) {
-			http.ServeFile(w, r, path.Join(root, "index.html"))
-			return
-		}
-		fs.ServeHTTP(w, r)
-	}))
-}
-
-func serveStaticFile(r chi.Router, path, filepath string) {
-	if path == "" {
-		panic("no path for fileServer defined!")
+		middleware.DefaultLogger = middleware.RequestLogger(&middleware.DefaultLogFormatter{
+			Logger:  log.New(file, "", log.LstdFlags),
+			NoColor: true,
+		})
 	}
-	if strings.ContainsAny(path, "{}*") {
-		panic("fileServer does not permit URL parameters.")
-	}
-
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, filepath)
-	})
-
-	r.Get(path, handler)
-	r.Options(path, handler)
 }

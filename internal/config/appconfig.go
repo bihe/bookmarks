@@ -13,6 +13,7 @@ type AppConfig struct {
 	DB          Database           `json:"database"`
 	Log         LogConfig          `json:"logging"`
 	Cookies     ApplicationCookies `json:"cookies"`
+	ErrorPath   string             `json:"errorPath"`
 	StartURL    string             `json:"startUrl"`
 	Environment string             `json:"environment"`
 }
@@ -41,8 +42,9 @@ type Claim struct {
 
 // LogConfig is used to define settings for the logging process
 type LogConfig struct {
-	FilePath string `json:"filePath"`
-	LogLevel string `json:"logLevel"`
+	FilePath    string `json:"filePath"`
+	RequestPath string `json:"requestPath"`
+	LogLevel    string `json:"logLevel"`
 }
 
 // ApplicationCookies defines values for cookies

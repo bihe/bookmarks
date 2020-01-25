@@ -37,11 +37,11 @@ go-test:
 
 go-build:
 	@echo "  >  Building binary..."
-	go build -o bookmarks.api ./*.go
+	go build -o bookmarks.api ./cmd/server/*.go
 
 go-build-release:
 	@echo "  >  Building binary..."
-	GOOS=linux go build -race -ldflags="-s -w -X main.Version=${VERSION}${COMMIT} -X main.Build=${BUILD}" -tags prod -o bookmarks.api ./*.go
+	GOOS=linux CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${VERSION}${COMMIT} -X main.Build=${BUILD}" -tags prod -o bookmarks.api ./cmd/server/*.go
 go-clean:
 	@echo "  >  Cleaning build cache"
 	go clean ./...

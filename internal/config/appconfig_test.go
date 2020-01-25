@@ -25,6 +25,7 @@ const configString = `{
     },
     "logging": {
 	"filePath": "/temp/file",
+	"requestPath": "/temp/request",
 	"logLevel": "debug"
     },
     "cookies": {
@@ -33,6 +34,7 @@ const configString = `{
 	"secure": true,
 	"prefix": "prefix"
     },
+    "errorPath": "error",
     "startUrl": "http://url",
     "environment": "Development"
 }`
@@ -52,6 +54,7 @@ func TestConfigReader(t *testing.T) {
 	assert.Equal(t, "10m", config.Sec.CacheDuration)
 
 	assert.Equal(t, "/temp/file", config.Log.FilePath)
+	assert.Equal(t, "/temp/request", config.Log.RequestPath)
 	assert.Equal(t, "debug", config.Log.LogLevel)
 
 	assert.Equal(t, "example.com", config.Cookies.Domain)
@@ -61,4 +64,6 @@ func TestConfigReader(t *testing.T) {
 
 	assert.Equal(t, "http://url", config.StartURL)
 	assert.Equal(t, "Development", config.Environment)
+
+	assert.Equal(t, "error", config.ErrorPath)
 }

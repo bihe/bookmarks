@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/bihe/commons-go/handler"
 	"github.com/bihe/commons-go/security"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -22,9 +23,13 @@ func (s *Server) routes() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
+	s.setupRequestLogging()
+
+	r.Get("/error", s.errorHandler.Call(s.errorHandler.HandleError))
+
 	// serving static content
-	serveStaticFile(r, "/favicon.ico", filepath.Join(s.basePath, "./assets/favicon.ico"))
-	serveStaticDir(r, "/assets", http.Dir(filepath.Join(s.basePath, "./assets")))
+	handler.ServeStaticFile(r, "/favicon.ico", filepath.Join(s.basePath, "./assets/favicon.ico"))
+	handler.ServeStaticDir(r, "/assets", http.Dir(filepath.Join(s.basePath, "./assets")))
 
 	// this group "indicates" that all routes within this group use the JWT authentication
 	r.Group(func(r chi.Router) {
@@ -33,16 +38,16 @@ func (s *Server) routes() {
 
 		// group API methods together
 		r.Route("/api/v1", func(r chi.Router) {
-			r.Get("/appinfo", s.api.Secure(s.api.HandleAppInfo))
+			r.Get("/appinfo", s.appInfoAPI.Secure(s.appInfoAPI.HandleAppInfo))
 			// r.Get("/sites", s.api.Secure(s.api.HandleGetSites))
 			// r.Post("/sites", s.api.Secure(s.api.HandleSaveSites))
 			// r.Get("/sites/users/{siteName}", s.api.Secure((s.api.HandleGetUsersForSite)))
 		})
 		// the SPA
-		serveStaticDir(r, "/ui", http.Dir(filepath.Join(s.basePath, "./assets/ui")))
+		handler.ServeStaticDir(r, "/ui", http.Dir(filepath.Join(s.basePath, "./assets/ui")))
 
 		// swagger
-		serveStaticDir(r, "/swagger", http.Dir(filepath.Join(s.basePath, "./assets/swagger")))
+		handler.ServeStaticDir(r, "/swagger", http.Dir(filepath.Join(s.basePath, "./assets/swagger")))
 	})
 
 	r.Get("/", http.RedirectHandler("/ui", http.StatusMovedPermanently).ServeHTTP)

@@ -12,7 +12,7 @@
             "program": "${workspaceFolder}/cmd/server/main.go",
             "args": [
                 "-c",
-                "../../etc/application.json",
+                "../../_etc/application.json",
                 "-b",
                 "../.."
             ],

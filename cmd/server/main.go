@@ -41,17 +41,21 @@ func run() (err error) {
 
 	args := parseFlags()
 	appConfig := configFromFile(args.ConfigFile)
-	apiSrv := server.Create(args.BasePath, appConfig, version)
+	apiSrv := server.Create(args.BasePath, appConfig, version, args.Environment)
+
+	if args.Environment != "" {
+		appConfig.Environment = args.Environment
+	}
 
 	setupLog(appConfig)
-	log.SetLevel(log.DebugLevel)
 	addr := fmt.Sprintf("%s:%d", args.HostName, args.Port)
 	httpSrv := &http.Server{Addr: addr, Handler: apiSrv}
 
 	go func() {
 		fmt.Printf("%s Starting server ...\n", emoji.EmojiTagToUnicode(`:rocket:`))
-		fmt.Printf("%s Listening on '%s'\n", emoji.EmojiTagToUnicode(`:computer:`), httpSrv.Addr)
 		fmt.Printf("%s Version: '%s-%s'\n", emoji.EmojiTagToUnicode(`:bookmark:`), Version, Build)
+		fmt.Printf("%s Environment: '%s'\n", emoji.EmojiTagToUnicode(`:white_check_mark:`), appConfig.Environment)
+		fmt.Printf("%s Listening on '%s'\n", emoji.EmojiTagToUnicode(`:computer:`), httpSrv.Addr)
 		fmt.Printf("%s Ready!\n", emoji.EmojiTagToUnicode(`:checkered_flag:`))
 
 		if err := httpSrv.ListenAndServe(); err != http.ErrServerClosed {
@@ -83,18 +87,20 @@ func graceful(s *http.Server, timeout time.Duration) error {
 
 // args is used to configure the API server
 type args struct {
-	HostName   string
-	Port       int
-	ConfigFile string
-	BasePath   string
+	HostName    string
+	Port        int
+	ConfigFile  string
+	BasePath    string
+	Environment string
 }
 
 func parseFlags() *args {
 	c := new(args)
 	flag.StringVar(&c.HostName, "hostname", "localhost", "the server hostname")
 	flag.IntVar(&c.Port, "port", 3000, "network port to listen")
-	flag.StringVar(&c.BasePath, "b", "./", "the base path of the appliction")
+	flag.StringVar(&c.BasePath, "b", "./", "the base path of the application")
 	flag.StringVar(&c.ConfigFile, "c", "application.json", "path to the application c file")
+	flag.StringVar(&c.Environment, "e", "Development", "name of the environment to use")
 	flag.Parse()
 	return c
 }
