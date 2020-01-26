@@ -1,3 +1,4 @@
+// Package html returns html-formated templates mainly used to present human-readable errors
 package html
 
 import (

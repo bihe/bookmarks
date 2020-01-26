@@ -21,7 +21,8 @@ const configString = `{
 	"cacheDuration": "10m"
     },
     "database": {
-	"connectionString": "./bookmarks.db"
+	"connectionString": "./bookmarks.db",
+	"dialect": "mysql"
     },
     "logging": {
 	"filePath": "/temp/file",
@@ -47,6 +48,7 @@ func TestConfigReader(t *testing.T) {
 		t.Error("Could not read.", err)
 	}
 	assert.Equal(t, "./bookmarks.db", config.DB.ConnStr)
+	assert.Equal(t, "mysql", config.DB.Dialect)
 
 	assert.Equal(t, "https://login.url.com", config.Sec.LoginRedirect)
 	assert.Equal(t, "bookmarks", config.Sec.Claim.Name)
