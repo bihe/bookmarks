@@ -6,6 +6,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.4.0
 	github.com/bihe/commons-go v1.0.6
 	github.com/go-chi/chi v4.0.3+incompatible
+	github.com/google/uuid v1.1.1
 	github.com/jinzhu/gorm v1.9.12
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.4.0

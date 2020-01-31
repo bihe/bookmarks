@@ -1,6 +1,9 @@
 package store
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type NodeType uint
 
@@ -8,6 +11,10 @@ const (
 	Node NodeType = iota
 	Folder
 )
+
+func (n NodeType) String() string {
+	return [...]string{"Node", "Folder"}[n]
+}
 
 // Bookmark maps the database table to a struct
 type Bookmark struct {
@@ -23,6 +30,10 @@ type Bookmark struct {
 	ChildCount  int        `gorm:"column:child_count;DEFAULT:0;NOT NULL"`
 	AccessCount int        `gorm:"column:access_count;DEFAULT:0;NOT NULL"`
 	Favicon     string     `gorm:"Type:varchar(128);column:favicon;NOT NULL"`
+}
+
+func (b Bookmark) String() string {
+	return fmt.Sprintf("Bookmark: '%s, %s' (Id: %s, Type: %s)", b.Path, b.DisplayName, b.ID, b.Type)
 }
 
 // TableName specifies the name of the Table used

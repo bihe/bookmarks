@@ -8,6 +8,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/jinzhu/gorm"
+	"github.com/stretchr/testify/assert"
 
 	_ "github.com/jinzhu/gorm/dialects/sqlite" // use sqlite for testing
 )
@@ -31,7 +32,7 @@ func mockRepository() (Repository, sqlmock.Sqlmock, error) {
 	return Create(DB), mock, nil
 }
 
-func inMemoryRepository() (Repository, *gorm.DB, error) {
+func repository() (Repository, *gorm.DB, error) {
 	var (
 		DB  *gorm.DB
 		err error
@@ -75,8 +76,8 @@ func Test_Mock_GetAllBookmarks(t *testing.T) {
 	}
 }
 
-func Test_InMemory_GetAllBookmarks(t *testing.T) {
-	repo, db, err := inMemoryRepository()
+func TestGetAllBookmarks(t *testing.T) {
+	repo, db, err := repository()
 	if err != nil {
 		t.Fatalf("Could not create Repository: %v", err)
 	}
@@ -90,4 +91,31 @@ func Test_InMemory_GetAllBookmarks(t *testing.T) {
 	if len(bookmarks) != 0 {
 		t.Errorf("Invalid number of bookmarks returned: %d", len(bookmarks))
 	}
+}
+
+func TestCreateBookmark(t *testing.T) {
+	repo, db, err := repository()
+	if err != nil {
+		t.Fatalf("Could not create Repository: %v", err)
+	}
+	defer db.Close()
+
+	userName := "username"
+	item := Bookmark{
+		DisplayName: "displayName",
+		Path:        "/",
+		SortOrder:   0,
+		Type:        Node,
+		URL:         "http://url",
+		UserName:    userName,
+	}
+	bm, err := repo.Create(item)
+	if err != nil {
+		t.Errorf("Could not create bookmarks: %v", err)
+	}
+
+	assert.NotEmpty(t, bm.ID)
+	assert.Equal(t, "displayName", bm.DisplayName)
+	assert.Equal(t, "http://url", bm.URL)
+
 }
