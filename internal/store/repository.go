@@ -18,26 +18,25 @@ import (
 
 TODO
 
+	Task<List<BookmarkEntity>> GetBookmarksByPath(string path, string username);
+	Task<List<BookmarkEntity>> GetBookmarksByPathStart(string startPath, string username);
+	Task<List<BookmarkEntity>> GetBookmarksByName(string name, string username);
+	Task<List<NodeCount>> GetChildCountOfPath(string path, string username);
+	Task<List<BookmarkEntity>> GetMostRecentBookmarks(string username, int limit);
+
+	Task<BookmarkEntity> GetFolderByPath(string path, string username);
 
 
-        Task<List<BookmarkEntity>> GetBookmarksByPath(string path, string username);
-        Task<List<BookmarkEntity>> GetBookmarksByPathStart(string startPath, string username);
-        Task<List<BookmarkEntity>> GetBookmarksByName(string name, string username);
-        Task<List<NodeCount>> GetChildCountOfPath(string path, string username);
-        Task<List<BookmarkEntity>> GetMostRecentBookmarks(string username, int limit);
-
-        Task<BookmarkEntity> GetFolderByPath(string path, string username);
-
-        Task<BookmarkEntity> Update(BookmarkEntity item);
-        Task<bool> Delete(BookmarkEntity item);
 	Task<bool> DeletePath(string path, string username);
 
 DONE
 
 	Task<List<BookmarkEntity>> GetAllBookmarks(string username);
-	Task<(bool result, T value)> InUnitOfWorkAsync<T>(Func<Task<(bool result,T value)>> atomicOperation);
 
+	Task<(bool result, T value)> InUnitOfWorkAsync<T>(Func<Task<(bool result,T value)>> atomicOperation);
 	Task<BookmarkEntity> Create(BookmarkEntity item);
+	Task<BookmarkEntity> Update(BookmarkEntity item);
+	Task<bool> Delete(BookmarkEntity item);
 
 	Task<BookmarkEntity> GetBookmarkById(string id, string username);
 
@@ -47,6 +46,8 @@ DONE
 type Repository interface {
 	InUnitOfWork(fn func(repo Repository) error) error
 	Create(item Bookmark) (Bookmark, error)
+	Update(item Bookmark) (Bookmark, error)
+	Delete(item Bookmark) error
 
 	GetAllBookmarks(username string) ([]Bookmark, error)
 
@@ -64,9 +65,6 @@ func Create(db *gorm.DB) Repository {
 // --------------------------------------------------------------------------
 // Implementation
 // --------------------------------------------------------------------------
-
-// compile-time check if the interface is implemented
-var _ Repository = (*dbRepository)(nil)
 
 type dbRepository struct {
 	transient *gorm.DB
@@ -153,11 +151,101 @@ func (r *dbRepository) Create(item Bookmark) (Bookmark, error) {
 			return c + 1
 		})
 		if err != nil {
-			return Bookmark{}, fmt.Errorf("could not update the child-count for the new item '%+v': %v", item, err)
+			return Bookmark{}, fmt.Errorf("could not update the child-count for '%s': %v", item.Path, err)
 		}
 	}
 
 	return item, nil
+}
+
+// Update changes an existing bookmark item
+func (r *dbRepository) Update(item Bookmark) (Bookmark, error) {
+	var (
+		err       error
+		hierarchy []string
+		bm        Bookmark
+	)
+
+	if item.Path == "" {
+		return Bookmark{}, fmt.Errorf("path is empty")
+	}
+
+	h := r.con().Where(&Bookmark{ID: item.ID, UserName: item.UserName}).First(&bm)
+	if h.Error != nil {
+		return Bookmark{}, fmt.Errorf("cannot get bookmark by id '%s': %v", item.ID, h.Error)
+	}
+
+	internal.LogFunction("store.Update").Debugf("update bookmark item: %+v", item)
+
+	// if we create a new bookmark item using a specific path we need to ensure that
+	// the parent-path is available. as this is a hierarchical structure this is quite tedious
+	// the solution is to query the whole hierarchy and check if the given path is there
+
+	if item.Path != "/" {
+		hierarchy, err = r.availablePaths(item.UserName)
+		if err != nil {
+			return Bookmark{}, err
+		}
+		found := false
+		for _, h := range hierarchy {
+			if h == item.Path {
+				found = true
+				break
+			}
+		}
+		if !found {
+			internal.LogFunction("store.Update").Warnf("cannot update the bookmark '%+v' because the parent path '%s' is not available!", item, item.Path)
+			return Bookmark{}, fmt.Errorf("cannot update item because of missing path hierarchy '%s'", item.Path)
+		}
+	}
+
+	now := time.Now().UTC()
+	bm.Modified = &now
+	bm.DisplayName = item.DisplayName
+	bm.Path = item.Path
+	bm.SortOrder = item.SortOrder
+	bm.URL = item.URL
+	bm.Favicon = item.Favicon
+	bm.AccessCount = item.AccessCount
+	bm.ChildCount = item.ChildCount
+
+	h = r.con().Save(&bm)
+	if h.Error != nil {
+		return Bookmark{}, fmt.Errorf("cannot update bookmark with id '%s': %v", item.ID, h.Error)
+	}
+	return bm, nil
+}
+
+// Delete removes the bookmark identified by id
+func (r *dbRepository) Delete(item Bookmark) error {
+	var (
+		bm  Bookmark
+		err error
+	)
+
+	h := r.con().Where(&Bookmark{ID: item.ID, UserName: item.UserName}).First(&bm)
+	if h.Error != nil {
+		return fmt.Errorf("cannot get bookmark by id '%s': %v", item.ID, h.Error)
+	}
+
+	internal.LogFunction("store.Delete").Debugf("delete bookmark item: %+v", item)
+
+	// one item is removed from a given path, decrement the child-count for
+	// the folder / path this item is located in
+	if item.Path != "/" {
+		err = r.calcChildCount(item.Path, item.UserName, func(c int) int {
+			return c - 1
+		})
+		if err != nil {
+			return fmt.Errorf("could not update the child-count for '%s': %v", item.Path, err)
+		}
+	}
+
+	h = r.con().Delete(&bm)
+	if h.Error != nil {
+		return fmt.Errorf("cannot delete bookmark by id '%s': %v", item.ID, h.Error)
+	}
+	return nil
 }
 
 // --------------------------------------------------------------------------

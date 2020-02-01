@@ -213,3 +213,106 @@ func TestCreateBookmarkInUnitOfWork(t *testing.T) {
 		t.Errorf("Cannot execute in UnitOfWork: %v", err)
 	}
 }
+
+func TestUpdateBookmark(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	userName := "username"
+	item := Bookmark{
+		DisplayName: "displayName",
+		Path:        "/",
+		SortOrder:   0,
+		Type:        Node,
+		URL:         "http://url",
+		UserName:    userName,
+	}
+	bm, err := repo.Create(item)
+	if err != nil {
+		t.Errorf("Could not create bookmarks: %v", err)
+	}
+
+	assert.NotEmpty(t, bm.ID)
+	assert.Equal(t, "displayName", bm.DisplayName)
+	assert.Equal(t, "http://url", bm.URL)
+
+	bm.DisplayName = bm.DisplayName + "_update"
+
+	bm, err = repo.Update(bm)
+	if err != nil {
+		t.Errorf("Could not update bookmarks: %v", err)
+	}
+	assert.Equal(t, "displayName_update", bm.DisplayName)
+
+	// update with empty-path
+	bm.Path = ""
+	bm, err = repo.Update(bm)
+	if err == nil {
+		t.Errorf("Expected error because of empty path")
+	}
+
+	// update with unknown-path
+	bm.Path = "/unknown/path"
+	bm, err = repo.Update(bm)
+	if err == nil {
+		t.Errorf("Expected error because of unknown path")
+	}
+}
+
+func TestDeleteBookmark(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	userName := "userName"
+
+	// create a root folder and a "child-node"
+	//
+	// /Folder
+	// /Folder/Node
+	f := Bookmark{
+		DisplayName: "Folder",
+		Path:        "/",
+		SortOrder:   0,
+		Type:        Folder,
+		UserName:    userName,
+	}
+	folder, err := repo.Create(f)
+	if err != nil {
+		t.Errorf("Could not create bookmarks: %v", err)
+	}
+	assert.NotEmpty(t, folder.ID)
+
+	n := Bookmark{
+		DisplayName: "Node",
+		Path:        "/Folder",
+		SortOrder:   0,
+		Type:        Node,
+		URL:         "http://url",
+		UserName:    userName,
+	}
+	node, err := repo.Create(n)
+	if err != nil {
+		t.Errorf("Could not create bookmarks: %v", err)
+	}
+	assert.NotEmpty(t, node.ID)
+
+	folder, err = repo.GetBookmarkById(folder.ID, folder.UserName)
+	if err != nil {
+		t.Errorf("Could not read bookmark folder: %v", err)
+	}
+	assert.Equal(t, 1, folder.ChildCount)
+
+	// remove the node
+	err = repo.Delete(node)
+	if err != nil {
+		t.Errorf("Could not delete bookmark: %v", err)
+	}
+
+	// child-count has to be 0 again
+	folder, err = repo.GetBookmarkById(folder.ID, folder.UserName)
+	if err != nil {
+		t.Errorf("Could not read bookmark folder: %v", err)
+	}
+	assert.Equal(t, 0, folder.ChildCount)
+
+}
