@@ -5,35 +5,31 @@ import (
 	"time"
 )
 
-type NodeType uint
+type NodeType int
 
 const (
 	Node NodeType = iota
 	Folder
 )
 
-func (n NodeType) String() string {
-	return [...]string{"Node", "Folder"}[n]
-}
-
 // Bookmark maps the database table to a struct
 type Bookmark struct {
-	ID          string     `gorm:"primary_key;Type:varchar(255);column:id"`
-	Path        string     `gorm:"Type:varchar(255);column:path;NOT NULL;index:IX_PATH;index:IX_PATH_USER"`
-	DisplayName string     `gorm:"Type:varchar(128);column:display_name;NOT NULL"`
-	URL         string     `gorm:"Type:varchar(512);column:url;NOT NULL;index:IX_SORT_ORDER"`
-	SortOrder   int        `gorm:"column:sort_order;DEFAULT:0;NOT NULL"`
-	Type        NodeType   `gorm:"column:type;DEFAULT:0;NOT NULL"`
-	UserName    string     `gorm:"Type:varchar(128);column:user_name;NOT NULL;index:IX_USER;index:IX_PATH_USER"`
-	Created     time.Time  `gorm:"column:created;NOT NULL"`
-	Modified    *time.Time `gorm:"column:modified"`
-	ChildCount  int        `gorm:"column:child_count;DEFAULT:0;NOT NULL"`
-	AccessCount int        `gorm:"column:access_count;DEFAULT:0;NOT NULL"`
-	Favicon     string     `gorm:"Type:varchar(128);column:favicon;NOT NULL"`
+	ID          string     `gorm:"primary_key;TYPE:varchar(255);COLUMN:id"`
+	Path        string     `gorm:"TYPE:varchar(255);COLUMN:path;NOT NULL;INDEX:IX_PATH;INDEX:IX_PATH_USER"`
+	DisplayName string     `gorm:"TYPE:varchar(128);COLUMN:display_name;NOT NULL"`
+	URL         string     `gorm:"TYPE:varchar(512);COLUMN:url;NOT NULL;INDEX:IX_SORT_ORDER"`
+	SortOrder   int        `gorm:"COLUMN:sort_order;DEFAULT:0;NOT NULL"`
+	Type        NodeType   `gorm:"COLUMN:type;DEFAULT:0;NOT NULL"`
+	UserName    string     `gorm:"TYPE:varchar(128);COLUMN:user_name;NOT NULL;INDEX:IX_USER;INDEX:IX_PATH_USER"`
+	Created     time.Time  `gorm:"COLUMN:created;NOT NULL"`
+	Modified    *time.Time `gorm:"COLUMN:modified"`
+	ChildCount  int        `gorm:"COLUMN:child_count;DEFAULT:0;NOT NULL"`
+	AccessCount int        `gorm:"COLUMN:access_count;DEFAULT:0;NOT NULL"`
+	Favicon     string     `gorm:"TYPE:varchar(128);COLUMN:favicon;NOT NULL"`
 }
 
 func (b Bookmark) String() string {
-	return fmt.Sprintf("Bookmark: '%s, %s' (Id: %s, Type: %s)", b.Path, b.DisplayName, b.ID, b.Type)
+	return fmt.Sprintf("Bookmark: '%s, %s' (Id: %s, Type: %d)", b.Path, b.DisplayName, b.ID, b.Type)
 }
 
 // TableName specifies the name of the Table used

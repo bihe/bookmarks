@@ -12,8 +12,8 @@
         "cacheDuration": "10m"
     },
     "database": {
-        "connectionString": ":memory:",
-        "dialect": "sqlite3"
+        "connectionString": "user:pass@tcp(host:port)/database?parseTime=true;sql_mode='PIPES_AS_CONCAT'",
+        "dialect": "mysql"
     },
     "logging": {
         "filePath": "./logs/bookmarks-api.log",

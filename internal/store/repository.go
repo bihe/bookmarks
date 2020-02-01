@@ -27,10 +27,8 @@ TODO
         Task<List<BookmarkEntity>> GetMostRecentBookmarks(string username, int limit);
 
         Task<BookmarkEntity> GetFolderByPath(string path, string username);
-        Task<BookmarkEntity> GetBookmarkById(string id, string username);
 
         Task<BookmarkEntity> Update(BookmarkEntity item);
-
         Task<bool> Delete(BookmarkEntity item);
 	Task<bool> DeletePath(string path, string username);
 
@@ -41,6 +39,7 @@ DONE
 
 	Task<BookmarkEntity> Create(BookmarkEntity item);
 
+	Task<BookmarkEntity> GetBookmarkById(string id, string username);
 
 */
 
@@ -50,6 +49,8 @@ type Repository interface {
 	Create(item Bookmark) (Bookmark, error)
 
 	GetAllBookmarks(username string) ([]Bookmark, error)
+
+	GetBookmarkById(id, username string) (Bookmark, error)
 }
 
 // Create a new repository
@@ -91,6 +92,13 @@ func (r *dbRepository) GetAllBookmarks(username string) ([]Bookmark, error) {
 	var bookmarks []Bookmark
 	h := r.con().Order("sort_order").Order("display_name").Where(&Bookmark{UserName: username}).Find(&bookmarks)
 	return bookmarks, h.Error
+}
+
+// GetBookmarkById returns the bookmark specified by the given id - for the user
+func (r *dbRepository) GetBookmarkById(id, username string) (Bookmark, error) {
+	var bookmark Bookmark
+	h := r.con().Where(&Bookmark{ID: id, UserName: username}).First(&bookmark)
+	return bookmark, h.Error
 }
 
 // Create is used to save a new bookmark entry
@@ -141,7 +149,6 @@ func (r *dbRepository) Create(item Bookmark) (Bookmark, error) {
 	// for this given path, and update the "parent" directory entry.
 	// exception: if the path is ROOT, '/' no update needs to be done, because no dedicated ROOT, '/' entry
 	if item.Path != "/" {
-		// TODO
 		err = r.calcChildCount(item.Path, item.UserName, func(c int) int {
 			return c + 1
 		})
@@ -171,23 +178,28 @@ const nativeHierarchyQuery = `SELECT '/' as path
 
 UNION ALL
 
-SELECT
-    concat(CASE ii.path
-	WHEN '/' THEN ''
-	ELSE ii.path
-    END, '/', ii.display_name) AS path
-FROM BOOKMARKS ii WHERE
-    ii.type = 1 AND lower(ii.user_name) = ?
-GROUP BY concat(ii.path,'/',ii.display_name)`
+SELECT a.path || '/' || a.display_name FROM (
+
+    SELECT
+        CASE ii.path
+            WHEN '/' THEN ''
+            ELSE ii.path
+        END AS path, ii.display_name
+    FROM BOOKMARKS ii WHERE
+        ii.type = ? AND ii.user_name = ?
+) a
+GROUP BY a.path || '/' || a.display_name`
 
 func (r *dbRepository) availablePaths(username string) (paths []string, err error) {
 	var (
 		rows *sql.Rows
 	)
 
-	rows, err = r.con().Raw(nativeHierarchyQuery, username).Rows() // (*sql.Rows, error)
+	rows, err = r.con().Raw(nativeHierarchyQuery, Folder, username).Rows() // (*sql.Rows, error)
 	defer func(ro *sql.Rows) {
-		err = ro.Close()
+		if ro != nil {
+			err = ro.Close()
+		}
 	}(rows)
 
 	if err != nil {

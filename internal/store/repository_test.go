@@ -32,19 +32,19 @@ func mockRepository() (Repository, sqlmock.Sqlmock, error) {
 	return Create(DB), mock, nil
 }
 
-func repository() (Repository, *gorm.DB, error) {
+func repository(t *testing.T) (Repository, *gorm.DB) {
 	var (
 		DB  *gorm.DB
 		err error
 	)
 	if DB, err = gorm.Open("sqlite3", ":memory:"); err != nil {
-		return nil, nil, err
+		t.Fatalf("cannot create database connection: %v", err)
 	}
 	// Migrate the schema
 	DB.AutoMigrate(&Bookmark{})
 
 	DB.LogMode(true)
-	return Create(DB), DB, nil
+	return Create(DB), DB
 }
 
 func Test_Mock_GetAllBookmarks(t *testing.T) {
@@ -77,10 +77,7 @@ func Test_Mock_GetAllBookmarks(t *testing.T) {
 }
 
 func TestGetAllBookmarks(t *testing.T) {
-	repo, db, err := repository()
-	if err != nil {
-		t.Fatalf("Could not create Repository: %v", err)
-	}
+	repo, db := repository(t)
 	defer db.Close()
 
 	userName := "test"
@@ -94,10 +91,7 @@ func TestGetAllBookmarks(t *testing.T) {
 }
 
 func TestCreateBookmark(t *testing.T) {
-	repo, db, err := repository()
-	if err != nil {
-		t.Fatalf("Could not create Repository: %v", err)
-	}
+	repo, db := repository(t)
 	defer db.Close()
 
 	userName := "username"
@@ -118,4 +112,104 @@ func TestCreateBookmark(t *testing.T) {
 	assert.Equal(t, "displayName", bm.DisplayName)
 	assert.Equal(t, "http://url", bm.URL)
 
+	// check item.Path empty error
+	item.Path = ""
+	bm, err = repo.Create(item)
+	if err == nil {
+		t.Errorf("Expected error on empty path!")
+	}
+}
+
+func TestCreatBookmarkAndHierarchy(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	userName := "userName"
+
+	// create a root folder and a "child-node"
+	//
+	// /Folder
+	// /Folder/Node
+	folder := Bookmark{
+		DisplayName: "Folder",
+		Path:        "/",
+		SortOrder:   0,
+		Type:        Folder,
+		UserName:    userName,
+	}
+	bm, err := repo.Create(folder)
+	if err != nil {
+		t.Errorf("Could not create bookmarks: %v", err)
+	}
+	assert.NotEmpty(t, bm.ID)
+
+	_, err = repo.GetBookmarkById(bm.ID, userName)
+	if err != nil {
+		t.Errorf("Could not read bookmarks: %v", err)
+	}
+
+	node := Bookmark{
+		DisplayName: "Node",
+		Path:        "/Folder",
+		SortOrder:   0,
+		Type:        Node,
+		URL:         "http://url",
+		UserName:    userName,
+	}
+	bm, err = repo.Create(node)
+	if err != nil {
+		t.Errorf("Could not create bookmarks: %v", err)
+	}
+	assert.NotEmpty(t, bm.ID)
+
+	n, err := repo.GetBookmarkById(bm.ID, userName)
+	if err != nil {
+		t.Errorf("Could not read bookmarks: %v", err)
+	}
+
+	assert.NotEmpty(t, n.ID)
+	assert.Equal(t, "Node", node.DisplayName)
+	assert.Equal(t, "/Folder", node.Path)
+	assert.Equal(t, Node, node.Type)
+	assert.Equal(t, "http://url", node.URL)
+
+	// error creating node because of missing folder
+	node.Path = "/unknown/folder"
+	bm, err = repo.Create(node)
+	if err == nil {
+		t.Errorf("Expected error for unknown path!")
+	}
+}
+
+func TestCreateBookmarkInUnitOfWork(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	userName := "userName"
+
+	folder := Bookmark{
+		DisplayName: "Folder",
+		Path:        "/",
+		SortOrder:   0,
+		Type:        Folder,
+		UserName:    userName,
+	}
+
+	err := repo.InUnitOfWork(func(r Repository) error {
+		bm, err := r.Create(folder)
+		if err != nil {
+			return err
+		}
+		assert.NotEmpty(t, bm.ID)
+
+		folder, err := r.GetBookmarkById(bm.ID, bm.UserName)
+		if err != nil {
+			return err
+		}
+		assert.Equal(t, "Folder", folder.DisplayName)
+		return nil
+	})
+	if err != nil {
+		t.Errorf("Cannot execute in UnitOfWork: %v", err)
+	}
 }
