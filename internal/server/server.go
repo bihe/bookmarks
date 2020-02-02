@@ -12,12 +12,17 @@ import (
 	"github.com/bihe/commons-go/errors"
 	"github.com/bihe/commons-go/handler"
 	"github.com/bihe/commons-go/security"
+	"github.com/jinzhu/gorm"
 
 	"github.com/bihe/bookmarks/internal"
 	"github.com/bihe/bookmarks/internal/config"
+	"github.com/bihe/bookmarks/internal/server/api"
 	"github.com/bihe/bookmarks/internal/server/html"
+	"github.com/bihe/bookmarks/internal/store"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+
+	_ "github.com/jinzhu/gorm/dialects/mysql" // use mysql
 )
 
 // Server struct defines the basic layout of a HTTP API server
@@ -32,6 +37,7 @@ type Server struct {
 
 	errorHandler *html.TemplateHandler
 	appInfoAPI   *handler.AppInfoHandler
+	bookmarkAPI  *api.BookmarksAPI
 }
 
 // Create instantiates a new Server instance
@@ -46,6 +52,16 @@ func Create(basePath string, config config.AppConfig, version internal.VersionIn
 		env = environment
 	}
 
+	// setup repository
+	// ------------------------------------------------------------------
+	con, err := gorm.Open(config.DB.Dialect, config.DB.ConnStr)
+	if err != nil {
+		panic(fmt.Sprintf("cannot create database connection: %v", err))
+	}
+	repository := store.Create(con)
+
+	// setup handlers for API
+	// ------------------------------------------------------------------
 	cookieSettings := cookies.Settings{
 		Path:   config.Cookies.Path,
 		Domain: config.Cookies.Domain,
@@ -69,6 +85,10 @@ func Create(basePath string, config config.AppConfig, version internal.VersionIn
 		CookieSettings: cookieSettings,
 		BasePath:       basePath,
 	}
+	bookmarkAPI := &api.BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: repository,
+	}
 
 	srv := Server{
 		basePath: base,
@@ -90,6 +110,7 @@ func Create(basePath string, config config.AppConfig, version internal.VersionIn
 		environment:    env,
 		appInfoAPI:     appInfo,
 		errorHandler:   errHandler,
+		bookmarkAPI:    bookmarkAPI,
 	}
 	srv.routes()
 	return &srv

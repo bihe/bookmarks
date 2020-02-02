@@ -39,9 +39,9 @@ func (s *Server) routes() {
 		// group API methods together
 		r.Route("/api/v1", func(r chi.Router) {
 			r.Get("/appinfo", s.appInfoAPI.Secure(s.appInfoAPI.HandleAppInfo))
-			// r.Get("/sites", s.api.Secure(s.api.HandleGetSites))
-			// r.Post("/sites", s.api.Secure(s.api.HandleSaveSites))
-			// r.Get("/sites/users/{siteName}", s.api.Secure((s.api.HandleGetUsersForSite)))
+
+			// bookmarks API
+			r.Get("/bookmarks/{id}", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarkByID))
 		})
 		// the SPA
 		handler.ServeStaticDir(r, "/ui", http.Dir(filepath.Join(s.basePath, "./assets/ui")))

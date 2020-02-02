@@ -22,6 +22,18 @@ run:
 clean:
 	@-$(MAKE) go-clean
 
+swagger:
+	@-$(MAKE) -s go-swagger
+
+update:
+	@-$(MAKE) go-update
+
+coverage:
+	@-$(MAKE) -s go-test-coverage
+
+
+
+
 
 go-compile: go-clean go-build
 
@@ -42,9 +54,22 @@ go-build:
 go-build-release:
 	@echo "  >  Building binary..."
 	GOOS=linux CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${VERSION}${COMMIT} -X main.Build=${BUILD}" -tags prod -o bookmarks.api ./cmd/server/*.go
+
+go-swagger:
+	# https://github.com/go-swagger/go-swagger
+	swagger generate spec -o assets/swagger/swagger.json -m -w ./internal/server/api
+
 go-clean:
 	@echo "  >  Cleaning build cache"
 	go clean ./...
 	rm -f ./bookmarks.api
+
+go-update:
+	@echo "  >  Go update dependencies ..."
+	go get -u ./...
+
+go-test-coverage:
+	@echo "  >  Go test coverage ..."
+	go test -race -coverprofile="coverage.txt" -covermode atomic ./...
 
 .PHONY: compile release test run clean
