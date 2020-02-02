@@ -14,44 +14,22 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
-/* migrated from dotnet
-
-TODO
-
-	Task<List<BookmarkEntity>> GetBookmarksByPath(string path, string username);
-	Task<List<BookmarkEntity>> GetBookmarksByPathStart(string startPath, string username);
-	Task<List<BookmarkEntity>> GetBookmarksByName(string name, string username);
-	Task<List<NodeCount>> GetChildCountOfPath(string path, string username);
-	Task<List<BookmarkEntity>> GetMostRecentBookmarks(string username, int limit);
-
-	Task<BookmarkEntity> GetFolderByPath(string path, string username);
-
-
-	Task<bool> DeletePath(string path, string username);
-
-DONE
-
-	Task<List<BookmarkEntity>> GetAllBookmarks(string username);
-
-	Task<(bool result, T value)> InUnitOfWorkAsync<T>(Func<Task<(bool result,T value)>> atomicOperation);
-	Task<BookmarkEntity> Create(BookmarkEntity item);
-	Task<BookmarkEntity> Update(BookmarkEntity item);
-	Task<bool> Delete(BookmarkEntity item);
-
-	Task<BookmarkEntity> GetBookmarkById(string id, string username);
-
-*/
-
 // Repository defines methods to interact with a store
 type Repository interface {
 	InUnitOfWork(fn func(repo Repository) error) error
 	Create(item Bookmark) (Bookmark, error)
 	Update(item Bookmark) (Bookmark, error)
 	Delete(item Bookmark) error
+	DeletePath(path, username string) error
 
 	GetAllBookmarks(username string) ([]Bookmark, error)
+	GetBookmarksByPath(path, username string) ([]Bookmark, error)
+	GetBookmarksByName(name, username string) ([]Bookmark, error)
+	GetMostRecentBookmarks(username string, limit int) ([]Bookmark, error)
+	GetPathChildCount(path, username string) ([]NodeCount, error)
 
 	GetBookmarkById(id, username string) (Bookmark, error)
+	GetFolderByPath(path, username string) (Bookmark, error)
 }
 
 // Create a new repository
@@ -85,10 +63,41 @@ func (r *dbRepository) InUnitOfWork(fn func(repo Repository) error) error {
 	})
 }
 
+// query data
+// --------------------------------------------------------------------------
+
 // GetAllBookmarks retrieves all available bookmarks for the given user
 func (r *dbRepository) GetAllBookmarks(username string) ([]Bookmark, error) {
 	var bookmarks []Bookmark
 	h := r.con().Order("sort_order").Order("display_name").Where(&Bookmark{UserName: username}).Find(&bookmarks)
+	return bookmarks, h.Error
+}
+
+// GetBookmarksByPath return the bookmark elements which have the given path
+func (r *dbRepository) GetBookmarksByPath(path, username string) ([]Bookmark, error) {
+	var bookmarks []Bookmark
+	h := r.con().Order("sort_order").Order("display_name").Where(&Bookmark{
+		UserName: username,
+		Path:     path,
+	}).Find(&bookmarks)
+	return bookmarks, h.Error
+}
+
+// GetBookmarksByName searches for bookmarks by the given name
+func (r *dbRepository) GetBookmarksByName(name, username string) ([]Bookmark, error) {
+	var bookmarks []Bookmark
+	h := r.con().Order("sort_order").Order("display_name").
+		Where("user_name = ? AND lower(display_name) LIKE ?", username, "%"+strings.ToLower(name)+"%").Find(&bookmarks)
+	return bookmarks, h.Error
+}
+
+// GetMostRecentBookmarks returns bookmarks which where recently visited
+func (r *dbRepository) GetMostRecentBookmarks(username string, limit int) ([]Bookmark, error) {
+	var bookmarks []Bookmark
+	h := r.con().
+		Limit(limit).
+		Order("access_count DESC").Order("display_name").
+		Where("user_name = ? AND type = ? AND access_count > 0", username, Node).Find(&bookmarks)
 	return bookmarks, h.Error
 }
 
@@ -98,6 +107,50 @@ func (r *dbRepository) GetBookmarkById(id, username string) (Bookmark, error) {
 	h := r.con().Where(&Bookmark{ID: id, UserName: username}).First(&bookmark)
 	return bookmark, h.Error
 }
+
+// GetFolderByPath returns the bookmark folder elements specified by path
+func (r *dbRepository) GetFolderByPath(path, username string) (Bookmark, error) {
+	var bookmark Bookmark
+
+	parent, folderName, ok := pathAndFolder(path)
+	if !ok {
+		return Bookmark{}, fmt.Errorf("could not get parent/folder of path '%s'", path)
+	}
+
+	h := r.con().Where(&Bookmark{
+		UserName:    username,
+		Path:        parent,
+		DisplayName: folderName,
+		Type:        Folder,
+	}).First(&bookmark)
+
+	return bookmark, h.Error
+}
+
+// GetPathChildCount returns the number of child-elements for a given path
+func (r *dbRepository) GetPathChildCount(path, username string) ([]NodeCount, error) {
+	if path == "" {
+		return nil, fmt.Errorf("no path supplied")
+	}
+
+	query := `SELECT i.path as path, count(i.id) as count FROM BOOKMARKS i WHERE i.path IN (
+                %s
+                ) GROUP BY i.path %s ORDER BY i.path`
+
+	query = fmt.Sprintf(query, nativeHierarchyQuery, "HAVING i.path = ?")
+
+	// Folder, Username, Path
+	var nodes []NodeCount
+	h := r.con().Raw(query, Folder, username, path).Scan(&nodes)
+	if h.Error != nil {
+		return nil, fmt.Errorf("could not get nodecount for path '%s': %v", path, h.Error)
+	}
+
+	return nodes, nil
+}
+
+// modify data
+// --------------------------------------------------------------------------
 
 // Create is used to save a new bookmark entry
 func (r *dbRepository) Create(item Bookmark) (Bookmark, error) {
@@ -248,6 +301,57 @@ func (r *dbRepository) Delete(item Bookmark) error {
 	return nil
 }
 
+// DeletePath removes all bookmarks having the same path
+func (r *dbRepository) DeletePath(path, username string) error {
+
+	if path == "" {
+		return fmt.Errorf("path is empty")
+	}
+	if path == "/" {
+		return fmt.Errorf("cannot delete the root path")
+	}
+
+	h := r.con().Where("user_name = ? AND path LIKE ?", username, path+"%").Delete(Bookmark{})
+	if h.Error != nil {
+		return fmt.Errorf("no bookmarks available for path '%s': %v", path, h.Error)
+	}
+
+	folder, err := r.GetFolderByPath(path, username)
+	if err != nil {
+		return fmt.Errorf("could not get folder of given path '%s'", path)
+	}
+	h = r.con().Delete(&folder)
+	if h.Error != nil {
+		return fmt.Errorf("cannot delete folder '%s': %v", path, h.Error)
+	}
+
+	// entries with path /pa/th were deleted - also the folder /pa - th needs to be deleted
+	parentPath, _, ok := pathAndFolder(path)
+	if !ok {
+		return fmt.Errorf("could not get parent-path/folder of given path '%s'", path)
+	}
+
+	if parentPath != "/" {
+		parentFolder, err := r.GetFolderByPath(parentPath, username)
+		if err != nil {
+			return fmt.Errorf("could not get folder of given path '%s'", parentPath)
+		}
+		nodes, err := r.GetPathChildCount(parentPath, username)
+		if err != nil {
+			return fmt.Errorf("could not get child-count of given path '%s'", parentPath)
+		}
+
+		var count int
+		if len(nodes) > 0 {
+			count = nodes[0].Count
+		}
+
+		return r.updateChildCount(&parentFolder, count)
+	}
+
+	return nil
+}
+
 // --------------------------------------------------------------------------
 // internal logic / helpers
 // --------------------------------------------------------------------------
@@ -260,6 +364,14 @@ func (r *dbRepository) con() *gorm.DB {
 		panic("no database connection is available")
 	}
 	return r.transient
+}
+
+func (r *dbRepository) updateChildCount(folder *Bookmark, count int) error {
+	if h := r.con().Model(folder).Update(
+		map[string]interface{}{"child_count": count, "modified": time.Now().UTC()}); h.Error != nil {
+		return fmt.Errorf("cannot update item '%+v': %v", *folder, h.Error)
+	}
+	return nil
 }
 
 const nativeHierarchyQuery = `SELECT '/' as path
@@ -322,10 +434,7 @@ func (r *dbRepository) calcChildCount(path, username string, fn func(i int) int)
 
 	// update the found item
 	count := fn(bm.ChildCount)
-	if h := r.con().Model(&bm).Update("child_count", count); h.Error != nil {
-		return fmt.Errorf("cannot update item '%+v': %v", bm, h.Error)
-	}
-	return nil
+	return r.updateChildCount(&bm, count)
 }
 
 func pathAndFolder(fullPath string) (path string, folder string, valid bool) {

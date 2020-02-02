@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"regexp"
 	"testing"
 	"time"
@@ -195,13 +196,14 @@ func TestCreateBookmarkInUnitOfWork(t *testing.T) {
 		UserName:    userName,
 	}
 
+	id := ""
 	err := repo.InUnitOfWork(func(r Repository) error {
 		bm, err := r.Create(folder)
 		if err != nil {
 			return err
 		}
 		assert.NotEmpty(t, bm.ID)
-
+		id = bm.ID
 		folder, err := r.GetBookmarkById(bm.ID, bm.UserName)
 		if err != nil {
 			return err
@@ -211,6 +213,45 @@ func TestCreateBookmarkInUnitOfWork(t *testing.T) {
 	})
 	if err != nil {
 		t.Errorf("Cannot execute in UnitOfWork: %v", err)
+	}
+
+	// get the created entry "out-of" the transaction
+	folder, err = repo.GetBookmarkById(id, userName)
+	if err != nil {
+		t.Errorf("could not get the created folder by id: %v", err)
+	}
+	assert.Equal(t, "Folder", folder.DisplayName)
+
+	// test a rollback
+	folderRollback := Bookmark{
+		DisplayName: "Folder",
+		Path:        "/",
+		SortOrder:   0,
+		Type:        Folder,
+		UserName:    userName,
+	}
+	err = repo.InUnitOfWork(func(r Repository) error {
+		bm, err := r.Create(folderRollback)
+		if err != nil {
+			return err
+		}
+		assert.NotEmpty(t, bm.ID)
+		id = bm.ID
+		folder, err := r.GetBookmarkById(bm.ID, bm.UserName)
+		if err != nil {
+			return err
+		}
+		assert.Equal(t, "Folder", folder.DisplayName)
+		return fmt.Errorf("rollback")
+	})
+	if err == nil {
+		t.Errorf("expected an error because of rollback")
+	}
+
+	// get the created entry "out-of" the transaction
+	folder, err = repo.GetBookmarkById(id, userName)
+	if err == nil {
+		t.Errorf("expected an error because item not availabel!")
 	}
 }
 
@@ -314,5 +355,406 @@ func TestDeleteBookmark(t *testing.T) {
 		t.Errorf("Could not read bookmark folder: %v", err)
 	}
 	assert.Equal(t, 0, folder.ChildCount)
+}
 
+func TestGetPathChildCount(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+	errStr := "Could not create bookmarks: %v"
+	errStrNodes := "Could not get node-count: %v"
+
+	userName := "userName"
+
+	// create a folder structure
+	_, err := repo.Create(Bookmark{
+		Type:        Folder,
+		DisplayName: "Folder",
+		UserName:    userName,
+		Path:        "/",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Folder,
+		DisplayName: "Folder1",
+		UserName:    userName,
+		Path:        "/",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Node,
+		DisplayName: "Node",
+		UserName:    userName,
+		Path:        "/Folder",
+		URL:         "http://url",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Node,
+		DisplayName: "Node1",
+		UserName:    userName,
+		Path:        "/Folder1",
+		URL:         "http://url",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+
+	// Root
+	nodes, err := repo.GetPathChildCount("/", userName)
+	if err != nil {
+		t.Errorf(errStrNodes, err)
+	}
+	assert.Equal(t, 1, len(nodes))
+	assert.Equal(t, "/", nodes[0].Path)
+	assert.Equal(t, 2, nodes[0].Count)
+
+	// Folder
+	nodes, err = repo.GetPathChildCount("/Folder", userName)
+	if err != nil {
+		t.Errorf(errStrNodes, err)
+	}
+	assert.Equal(t, 1, len(nodes))
+	assert.Equal(t, "/Folder", nodes[0].Path)
+	assert.Equal(t, 1, nodes[0].Count)
+
+	// Folder1
+	nodes, err = repo.GetPathChildCount("/Folder1", userName)
+	if err != nil {
+		t.Errorf(errStrNodes, err)
+	}
+	assert.Equal(t, 1, len(nodes))
+	assert.Equal(t, "/Folder1", nodes[0].Path)
+	assert.Equal(t, 1, nodes[0].Count)
+
+	// no path
+	_, err = repo.GetPathChildCount("", userName)
+	if err == nil {
+		t.Errorf("expected error because of missing path")
+	}
+}
+
+func TestDeletePath(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+	errStr := "Could not create bookmarks: %v"
+
+	userName := "userName"
+
+	// create a folder structure
+	_, err := repo.Create(Bookmark{
+		Type:        Folder,
+		DisplayName: "Folder",
+		UserName:    userName,
+		Path:        "/",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Folder,
+		DisplayName: "Folder1",
+		UserName:    userName,
+		Path:        "/",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Node,
+		DisplayName: "Node",
+		UserName:    userName,
+		Path:        "/Folder",
+		URL:         "http://url",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Node,
+		DisplayName: "Node1",
+		UserName:    userName,
+		Path:        "/Folder1",
+		URL:         "http://url",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+
+	all, err := repo.GetAllBookmarks(userName)
+	if err != nil {
+		t.Errorf("could not get all bookmarks: %v", err)
+	}
+	assert.Equal(t, 4, len(all))
+
+	// Delete the whole folder-path /Folder1 (1 x Node + 1 x Folder1)
+	err = repo.DeletePath("/Folder1", userName)
+	if err != nil {
+		t.Errorf("could not delete folder path /Folder1: %v", err)
+	}
+
+	all, err = repo.GetAllBookmarks(userName)
+	if err != nil {
+		t.Errorf("could not get all bookmarks: %v", err)
+	}
+	assert.Equal(t, 2, len(all))
+
+	// Delete the whole folder-path /Folder (1 x Node + 1 x Folder)
+	err = repo.DeletePath("/Folder", userName)
+	if err != nil {
+		t.Errorf("could not delete folder path /Folder: %v", err)
+	}
+
+	all, err = repo.GetAllBookmarks(userName)
+	if err != nil {
+		t.Errorf("could not get all bookmarks: %v", err)
+	}
+	assert.Equal(t, 0, len(all))
+}
+
+func TestDeletePath2(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+	errStr := "Could not create bookmarks: %v"
+
+	userName := "userName"
+
+	// create a folder structure
+	folder, err := repo.Create(Bookmark{
+		Type:        Folder,
+		DisplayName: "Folder",
+		UserName:    userName,
+		Path:        "/",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Folder,
+		DisplayName: "Folder1",
+		UserName:    userName,
+		Path:        "/Folder",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Node,
+		DisplayName: "Node",
+		UserName:    userName,
+		Path:        "/Folder",
+		URL:         "http://url",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Node,
+		DisplayName: "Node1",
+		UserName:    userName,
+		Path:        "/Folder/Folder1",
+		URL:         "http://url",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+
+	all, err := repo.GetAllBookmarks(userName)
+	if err != nil {
+		t.Errorf("could not get all bookmarks: %v", err)
+	}
+	assert.Equal(t, 4, len(all))
+
+	// get the child-count of folder
+	bm, err := repo.GetBookmarkById(folder.ID, folder.UserName)
+	if err != nil {
+		t.Errorf("could not get bookmark by id %s: %v", folder.ID, err)
+	}
+	assert.Equal(t, 2, bm.ChildCount)
+
+	// Delete the whole folder-path /Folder/Folder1 (1 x Node + 1 x Folder1)
+	err = repo.DeletePath("/Folder/Folder1", userName)
+	if err != nil {
+		t.Errorf("could not delete folder path /Folder1: %v", err)
+	}
+
+	bm, err = repo.GetBookmarkById(folder.ID, folder.UserName)
+	if err != nil {
+		t.Errorf("could not get bookmark by id %s: %v", folder.ID, err)
+	}
+	assert.Equal(t, 1, bm.ChildCount)
+
+	// error checks
+	err = repo.DeletePath("", userName)
+	if err == nil {
+		t.Errorf("expected error empty path")
+	}
+	err = repo.DeletePath("/", userName)
+	if err == nil {
+		t.Errorf("expected error ROOT path")
+	}
+}
+
+func TestGetBookmarksByPath(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+	errStr := "could not get bookmarks: %v"
+
+	userName := "userName"
+
+	// create a folder structure
+	_, err := repo.Create(Bookmark{
+		Type:        Folder,
+		DisplayName: "Folder",
+		UserName:    userName,
+		Path:        "/",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Folder,
+		DisplayName: "Folder1",
+		UserName:    userName,
+		Path:        "/Folder",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+
+	bookmarks, err := repo.GetBookmarksByPath("/", userName)
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+
+	assert.Equal(t, 1, len(bookmarks))
+	assert.Equal(t, "Folder", bookmarks[0].DisplayName)
+
+	bookmarks, err = repo.GetBookmarksByPath("/Folder", userName)
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	assert.Equal(t, 1, len(bookmarks))
+	assert.Equal(t, "Folder1", bookmarks[0].DisplayName)
+}
+
+func TestGetBookmarksByName(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+	errStr := "Could not create bookmarks: %v"
+	errStr1 := "Could not get bookmarks: %v"
+
+	userName := "userName"
+
+	// create a folder structure
+	_, err := repo.Create(Bookmark{
+		Type:        Folder,
+		DisplayName: "Folder",
+		UserName:    userName,
+		Path:        "/",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Node,
+		DisplayName: "Node",
+		UserName:    userName,
+		Path:        "/Folder",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Node,
+		DisplayName: "Node1",
+		UserName:    userName,
+		Path:        "/Folder",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+
+	bookmarks, err := repo.GetBookmarksByName("node", userName)
+	if err != nil {
+		t.Errorf(errStr1, err)
+	}
+	assert.Equal(t, 2, len(bookmarks))
+
+	bookmarks, err = repo.GetBookmarksByName("Folder", userName)
+	if err != nil {
+		t.Errorf(errStr1, err)
+	}
+	assert.Equal(t, 1, len(bookmarks))
+
+	bookmarks, err = repo.GetBookmarksByName("o", userName)
+	if err != nil {
+		t.Errorf(errStr1, err)
+	}
+	assert.Equal(t, 3, len(bookmarks))
+}
+
+func TestGetMostRecentBookmarks(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+	errStr := "Could not create bookmarks: %v"
+
+	userName := "userName"
+
+	// create a folder structure
+	_, err := repo.Create(Bookmark{
+		Type:        Node,
+		DisplayName: "Node",
+		UserName:    userName,
+		Path:        "/",
+		AccessCount: 5,
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Node,
+		DisplayName: "Node1",
+		UserName:    userName,
+		Path:        "/",
+		AccessCount: 10,
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	_, err = repo.Create(Bookmark{
+		Type:        Node,
+		DisplayName: "Node2",
+		UserName:    userName,
+		Path:        "/",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+
+	all, err := repo.GetAllBookmarks(userName)
+	if err != nil {
+		t.Errorf("could not get bookmarks: %v", err)
+	}
+	assert.Equal(t, 3, len(all))
+
+	recent, err := repo.GetMostRecentBookmarks(userName, 10)
+	if err != nil {
+		t.Errorf("could not get bookmarks: %v", err)
+	}
+	assert.Equal(t, 2, len(recent))
+	assert.Equal(t, "Node1", recent[0].DisplayName)
+	assert.Equal(t, "Node", recent[1].DisplayName)
+
+	recent, err = repo.GetMostRecentBookmarks(userName, 1)
+	if err != nil {
+		t.Errorf("could not get bookmarks: %v", err)
+	}
+	assert.Equal(t, 1, len(recent))
+	assert.Equal(t, "Node1", recent[0].DisplayName)
 }

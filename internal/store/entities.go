@@ -36,3 +36,9 @@ func (b Bookmark) String() string {
 func (Bookmark) TableName() string {
 	return "BOOKMARKS"
 }
+
+// NodeCount displays the number of child-elements for a given path (1 level)
+type NodeCount struct {
+	Path  string
+	Count int
+}
