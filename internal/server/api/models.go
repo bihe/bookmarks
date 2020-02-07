@@ -33,6 +33,15 @@ type Bookmark struct {
 	Favicon     string     `json:"favicon"`
 }
 
+// BookmarkList is a collection of Bookmarks
+// swagger:model
+type BookmarkList struct {
+	Success bool       `json:"success"`
+	Count   int        `json:"count"`
+	Message string     `json:"message"`
+	Value   []Bookmark `json:"value"`
+}
+
 // --------------------------------------------------------------------------
 // BookmarkRequest
 // --------------------------------------------------------------------------
@@ -57,16 +66,27 @@ func (b *BookmarkRequest) Bind(r *http.Request) error {
 // --------------------------------------------------------------------------
 
 // BookmarkResponse is the response payload for the Bookmark data model.
-//
-// In the BookmarkResponse object, first a Render() is called on itself,
-// then the next field, and so on, all the way down the tree.
-// Render is called in top-down order, like a http handler middleware chain.
 type BookmarkResponse struct {
 	*Bookmark
 }
 
 // Render the specific response
 func (b BookmarkResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	// Pre-processing before a response is marshalled and sent across the wire
+	return nil
+}
+
+// --------------------------------------------------------------------------
+// BookmarkListResponse
+// --------------------------------------------------------------------------
+
+// BookmarkListResponse returns a list of Bookmark Items
+type BookmarkListResponse struct {
+	*BookmarkList
+}
+
+// Render the specific response
+func (b BookmarkListResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	// Pre-processing before a response is marshalled and sent across the wire
 	return nil
 }

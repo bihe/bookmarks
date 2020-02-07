@@ -90,21 +90,26 @@ func Create(basePath string, config config.AppConfig, version internal.VersionIn
 		Repository: repository,
 	}
 
-	srv := Server{
-		basePath: base,
-		jwtOpts: security.JwtOptions{
-			JwtSecret:  config.Sec.JwtSecret,
-			JwtIssuer:  config.Sec.JwtIssuer,
-			CookieName: config.Sec.CookieName,
-			RequiredClaim: security.Claim{
-				Name:  config.Sec.Claim.Name,
-				URL:   config.Sec.Claim.URL,
-				Roles: config.Sec.Claim.Roles,
-			},
-			RedirectURL:   config.Sec.LoginRedirect,
-			CacheDuration: config.Sec.CacheDuration,
-			ErrorPath:     config.ErrorPath,
+	// server combines setting and handlers to form the backend
+	// ------------------------------------------------------------------
+
+	jwtOptions := security.JwtOptions{
+		JwtSecret:  config.Sec.JwtSecret,
+		JwtIssuer:  config.Sec.JwtIssuer,
+		CookieName: config.Sec.CookieName,
+		RequiredClaim: security.Claim{
+			Name:  config.Sec.Claim.Name,
+			URL:   config.Sec.Claim.URL,
+			Roles: config.Sec.Claim.Roles,
 		},
+		RedirectURL:   config.Sec.LoginRedirect,
+		CacheDuration: config.Sec.CacheDuration,
+		ErrorPath:     config.ErrorPath,
+	}
+
+	srv := Server{
+		basePath:       base,
+		jwtOpts:        jwtOptions,
 		cookieSettings: cookieSettings,
 		logConfig:      config.Log,
 		environment:    env,

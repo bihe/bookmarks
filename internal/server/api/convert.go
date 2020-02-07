@@ -18,6 +18,14 @@ func entityToModel(b store.Bookmark) *Bookmark {
 	}
 }
 
+func entityListToModel(bms []store.Bookmark) []Bookmark {
+	var model = make([]Bookmark, 0)
+	for _, b := range bms {
+		model = append(model, *entityToModel(b))
+	}
+	return model
+}
+
 func entityEnumToModel(t store.NodeType) NodeType {
 	if t == store.Folder {
 		return Folder

@@ -98,6 +98,51 @@
           }
         }
       }
+    },
+    "/bookmarks/bypath": {
+      "get": {
+        "description": "returns a list of bookmarks for a given path",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "bookmarks"
+        ],
+        "summary": "get bookmarks by path",
+        "operationId": "GetBookmarksByPath",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BookmarkList",
+            "schema": {
+              "$ref": "#/definitions/BookmarkList"
+            }
+          },
+          "401": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          },
+          "403": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          },
+          "404": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -152,6 +197,33 @@
         "url": {
           "type": "string",
           "x-go-name": "URL"
+        }
+      },
+      "x-go-package": "github.com/bihe/bookmarks/internal/server/api"
+    },
+    "BookmarkList": {
+      "description": "BookmarkList is a collection of Bookmarks",
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "format": "int64",
+          "x-go-name": "Count"
+        },
+        "message": {
+          "type": "string",
+          "x-go-name": "Message"
+        },
+        "success": {
+          "type": "boolean",
+          "x-go-name": "Success"
+        },
+        "value": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Bookmark"
+          },
+          "x-go-name": "Value"
         }
       },
       "x-go-package": "github.com/bihe/bookmarks/internal/server/api"
