@@ -43,6 +43,9 @@ func (s *Server) routes() {
 			// bookmarks API
 			r.Get("/bookmarks/{id}", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarkByID))
 			r.Get("/bookmarks/bypath", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarksByPath))
+			r.Get("/bookmarks/folder", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarksFolderByPath))
+			r.Get("/bookmarks/byname", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarksByName))
+			r.Get("/bookmarks/mostvisited/{num}", s.bookmarkAPI.Secure(s.bookmarkAPI.GetMostVisited))
 		})
 		// the SPA
 		handler.ServeStaticDir(r, "/ui", http.Dir(filepath.Join(s.basePath, "./assets/ui")))

@@ -42,6 +42,14 @@ type BookmarkList struct {
 	Value   []Bookmark `json:"value"`
 }
 
+// BookmarkResult hast additional information about a Bookmark
+// swagger:model
+type BookmarkResult struct {
+	Success bool     `json:"success"`
+	Message string   `json:"message"`
+	Value   Bookmark `json:"value"`
+}
+
 // --------------------------------------------------------------------------
 // BookmarkRequest
 // --------------------------------------------------------------------------
@@ -87,6 +95,21 @@ type BookmarkListResponse struct {
 
 // Render the specific response
 func (b BookmarkListResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	// Pre-processing before a response is marshalled and sent across the wire
+	return nil
+}
+
+// --------------------------------------------------------------------------
+// BookmarResultResponse
+// --------------------------------------------------------------------------
+
+// BookmarResultResponse returns BookmarResult
+type BookmarResultResponse struct {
+	*BookmarkResult
+}
+
+// Render the specific response
+func (b BookmarResultResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	// Pre-processing before a response is marshalled and sent across the wire
 	return nil
 }
