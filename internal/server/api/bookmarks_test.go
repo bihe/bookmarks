@@ -1,12 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +18,10 @@ import (
 	"github.com/bihe/commons-go/handler"
 	"github.com/bihe/commons-go/security"
 	"github.com/go-chi/chi"
+	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
+
+	_ "github.com/jinzhu/gorm/dialects/sqlite" // use sqlite for testing
 )
 
 // --------------------------------------------------------------------------
@@ -29,12 +34,13 @@ var raisedError = fmt.Errorf("error")
 
 // common components necessary for handlers
 var baseHandler = handler.Handler{
-	ErrRep: errors.NewReporter(cookies.Settings{
-		Path:   "/",
-		Domain: "localhost",
-		Secure: false,
-		Prefix: "test",
-	}, "error"),
+	ErrRep: &errors.ErrorReporter{
+		CookieSettings: cookies.Settings{
+			Path:   "/",
+			Domain: "localhost",
+		},
+		ErrorPath: "error",
+	},
 }
 
 func jwtUser(next http.Handler) http.Handler {
@@ -454,4 +460,724 @@ func TestGetMostVisited(t *testing.T) {
 
 	assert.Equal(t, 0, bl.Count)
 	assert.Equal(t, true, bl.Success)
+}
+
+// --------------------------------------------------------------------------
+// CRUD tests
+// --------------------------------------------------------------------------
+
+func repository(t *testing.T) (store.Repository, *gorm.DB) {
+	var (
+		DB  *gorm.DB
+		err error
+	)
+	if DB, err = gorm.Open("sqlite3", ":memory:"); err != nil {
+		t.Fatalf("cannot create database connection: %v", err)
+	}
+	// Migrate the schema
+	DB.AutoMigrate(&store.Bookmark{})
+
+	DB.LogMode(true)
+	return store.Create(DB), DB
+}
+
+func (r *MockRepository) InUnitOfWork(fn func(repo store.Repository) error) error {
+	if r.fail {
+		return raisedError
+	}
+	return nil
+}
+
+func TestCreateBookmark(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	// arrange
+	r := chi.NewRouter()
+	r.Use(jwtUser)
+	bookmarkAPI := &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: repo,
+	}
+	defUrl := "/api/v1/bookmarks"
+	function := bookmarkAPI.Secure(bookmarkAPI.Create)
+
+	mockAPI := &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: &MockRepository{fail: true},
+	}
+
+	// testcases
+	tt := []struct {
+		name     string
+		payload  string
+		status   int
+		response string
+		function http.HandlerFunc
+	}{
+		{
+			name: "create node",
+			payload: `{
+				"displayName": "Node",
+				"path": "/",
+				"type": "Node",
+				"url": "http://url"
+			}`,
+			status:   http.StatusCreated,
+			response: "",
+			function: function,
+		},
+		{
+			name: "create folder",
+			payload: `{
+				"displayName": "Folder",
+				"path": "/",
+				"type": "Folder"
+			}`,
+			status:   http.StatusCreated,
+			response: "",
+			function: function,
+		},
+		{
+			name: "no path",
+			payload: `{
+				"displayName": "DisplayName",
+				"type": "Node",
+				"url": "http://url"
+			}`,
+			status:   http.StatusBadRequest,
+			response: "",
+			function: function,
+		},
+		{
+			name:     "invalid",
+			payload:  "{}",
+			status:   http.StatusBadRequest,
+			response: "",
+			function: function,
+		},
+		{
+			name: "repository error",
+			payload: `{
+				"displayName": "Node",
+				"path": "/",
+				"type": "Node",
+				"url": "http://url"
+			}`,
+			status:   http.StatusInternalServerError,
+			response: "",
+			function: mockAPI.Secure(mockAPI.Create),
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			var result ResultResponse
+
+			// act
+			r.Post(defUrl, tc.function)
+			req, _ := http.NewRequest("POST", defUrl, strings.NewReader(tc.payload))
+			req.Header.Add("Content-Type", "application/json")
+			r.ServeHTTP(rec, req)
+
+			// assert
+			assert.Equal(t, tc.status, rec.Code)
+			if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+				t.Errorf("could not unmarshal: %v", err)
+			}
+		})
+	}
+}
+
+func TestUpdateBookmark(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	// arrange
+	bookmarkAPI := &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: repo,
+	}
+	url := "/api/v1/bookmarks"
+
+	mockAPI := &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: &MockRepository{fail: true},
+	}
+
+	// validation
+	// ---------------------------------------------------------------
+	tt := []struct {
+		name     string
+		payload  string
+		status   int
+		function http.HandlerFunc
+	}{
+		{
+			name: "no path",
+			payload: `{
+				"id": "id",
+				"displayName": "DisplayName",
+				"type": "Node",
+				"url": "http://url"
+			}`,
+			status:   http.StatusBadRequest,
+			function: mockAPI.Secure(mockAPI.Update),
+		},
+		{
+			name:     "invalid",
+			payload:  "{}",
+			status:   http.StatusBadRequest,
+			function: mockAPI.Secure(mockAPI.Update),
+		},
+		{
+			name: "repository error",
+			payload: `{
+				"id": "id",
+				"displayName": "Node",
+				"path": "/",
+				"type": "Node",
+				"url": "http://url"
+			}`,
+			status:   http.StatusInternalServerError,
+			function: mockAPI.Secure(mockAPI.Update),
+		},
+	}
+	for _, tc := range tt {
+		r := chi.NewRouter()
+		r.Use(jwtUser)
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			var result ResultResponse
+
+			// act
+			r.Put(url, tc.function)
+			req, _ := http.NewRequest("PUT", url, strings.NewReader(tc.payload))
+			req.Header.Add("Content-Type", "application/json")
+			r.ServeHTTP(rec, req)
+
+			// assert
+			assert.Equal(t, tc.status, rec.Code)
+			if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+				t.Errorf("could not unmarshal: %v", err)
+			}
+		})
+	}
+
+	create := bookmarkAPI.Secure(bookmarkAPI.Create)
+	update := bookmarkAPI.Secure(bookmarkAPI.Update)
+	get := bookmarkAPI.Secure(bookmarkAPI.GetBookmarkByID)
+
+	r := chi.NewRouter()
+	r.Use(jwtUser)
+	r.Post(url, create)
+	r.Put(url, update)
+	r.Get(url+"/{id}", get)
+
+	payload := `{
+		"displayName": "Node",
+		"path": "/",
+		"type": "Node",
+		"url": "http://url"
+	}`
+
+	// create one item
+	// ---------------------------------------------------------------
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", url, strings.NewReader(payload))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	var result ResultResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Errorf("could not unmarshal: %v", err)
+	}
+	id := result.Value
+
+	// update the created item
+	// ---------------------------------------------------------------
+	payload = `{
+		"id": "%s",
+		"displayName": "Node_updated",
+		"path": "/",
+		"type": "Node",
+		"url": "http://url"
+	}`
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("PUT", url, strings.NewReader(fmt.Sprintf(payload, id)))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// update the WRONG item
+	// ---------------------------------------------------------------
+	payload = `{
+		"id": "MISSING_ID",
+		"displayName": "Node_updated",
+		"path": "/",
+		"type": "Node",
+		"url": "http://url"
+	}`
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("PUT", url, strings.NewReader(payload))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	// fetch the updated item
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", url+"/"+id, nil)
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var bookmark BookmarkResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &bookmark); err != nil {
+		t.Errorf("could not unmarshal: %v", err)
+	}
+
+	assert.Equal(t, "Node_updated", bookmark.DisplayName)
+}
+
+func TestUpdateBookmarkHierarchy(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	// arrange
+	bookmarkAPI := &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: repo,
+	}
+	url := "/api/v1/bookmarks"
+
+	// mockAPI := &BookmarksAPI{
+	// 	Handler:    baseHandler,
+	// 	Repository: &MockRepository{fail: true},
+	// }
+
+	create := bookmarkAPI.Secure(bookmarkAPI.Create)
+	update := bookmarkAPI.Secure(bookmarkAPI.Update)
+	getBookmark := bookmarkAPI.Secure(bookmarkAPI.GetBookmarkByID)
+	getFolder := bookmarkAPI.Secure(bookmarkAPI.GetBookmarksFolderByPath)
+	getByPath := bookmarkAPI.Secure(bookmarkAPI.GetBookmarksByPath)
+
+	r := chi.NewRouter()
+	r.Use(jwtUser)
+	r.Post(url, create)
+	r.Put(url, update)
+	r.Get(url+"/{id}", getBookmark)
+	r.Get(url+"/folder", getFolder)
+	r.Get(url+"/bypath", getByPath)
+
+	payload := `{
+		"displayName": "%s",
+		"path": "%s",
+		"type": "Folder"
+	}`
+
+	// create folder hierarchy
+	// /Folder
+	//     /Folder1
+	//     /folder2
+	// ---------------------------------------------------------------
+
+	// /Folder
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", url, strings.NewReader(fmt.Sprintf(payload, "Folder", "/")))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// /Folder/Folder1
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", url, strings.NewReader(fmt.Sprintf(payload, "Folder1", "/Folder")))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// /Folder/Folder2
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", url, strings.NewReader(fmt.Sprintf(payload, "Folder2", "/Folder")))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// get the folder /Folder
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", url+"/folder?path="+"/Folder", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var bookmarkFolder BookmarResultResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &bookmarkFolder); err != nil {
+		t.Errorf("could not unmarshal: %v", err)
+	}
+
+	// update the folder
+	// ---------------------------------------------------------------
+	bm := bookmarkFolder.Value
+	bm.DisplayName = bm.DisplayName + "_updated"
+	id := bm.ID
+
+	payloadBytes, err := json.Marshal(bm)
+	if err != nil {
+		t.Errorf("cannot marshall payload: %v", err)
+	}
+
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("PUT", url, bytes.NewReader(payloadBytes))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var response ResultResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Errorf("could not unmarshal: %v", err)
+	}
+	assert.Equal(t, id, response.Value)
+
+	// check that the path of the child-folders has changed as well
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", url+"/bypath?path="+"/Folder_updated", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var bookmarkList BookmarkListResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &bookmarkList); err != nil {
+		t.Errorf("could not unmarshal: %v", err)
+	}
+	assert.Equal(t, 2, len(bookmarkList.Value))
+	assert.Equal(t, "/Folder_updated", bookmarkList.Value[0].Path)
+}
+
+func TestDeleteBookmark(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	// arrange
+	bookmarkAPI := &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: repo,
+	}
+	url := "/api/v1/bookmarks"
+
+	// validation
+	// ---------------------------------------------------------------
+	mockAPI := &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: &MockRepository{fail: true},
+	}
+
+	tt := []struct {
+		name     string
+		status   int
+		id       string
+		function http.HandlerFunc
+	}{
+		{
+			name:     "no id",
+			status:   http.StatusNotFound,
+			function: mockAPI.Secure(mockAPI.Delete),
+		},
+		{
+			name:     "repository error",
+			id:       "id",
+			status:   http.StatusInternalServerError,
+			function: mockAPI.Secure(mockAPI.Delete),
+		},
+	}
+	for _, tc := range tt {
+		r := chi.NewRouter()
+		r.Use(jwtUser)
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+
+			// act
+			r.Delete(url+"/{id}", tc.function)
+			req, _ := http.NewRequest("DELETE", url+"/"+tc.id, nil)
+			r.ServeHTTP(rec, req)
+
+			// assert
+			assert.Equal(t, tc.status, rec.Code)
+		})
+	}
+
+	create := bookmarkAPI.Secure(bookmarkAPI.Create)
+	delete := bookmarkAPI.Secure(bookmarkAPI.Delete)
+
+	r := chi.NewRouter()
+	r.Use(jwtUser)
+	r.Post(url, create)
+	r.Delete(url+"/{id}", delete)
+
+	payload := `{
+		"displayName": "Node",
+		"path": "/",
+		"type": "Node",
+		"url": "http://url"
+	}`
+
+	// create one item
+	// ---------------------------------------------------------------
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", url, strings.NewReader(payload))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	var result ResultResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Errorf("could not unmarshal: %v", err)
+	}
+	id := result.Value
+
+	// delete the created item
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("DELETE", url+"/"+id, nil)
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestDeleteBookmarkHierarchy(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	// arrange
+	bookmarkAPI := &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: repo,
+	}
+	url := "/api/v1/bookmarks"
+
+	create := bookmarkAPI.Secure(bookmarkAPI.Create)
+	delete := bookmarkAPI.Secure(bookmarkAPI.Delete)
+	getBookmark := bookmarkAPI.Secure(bookmarkAPI.GetBookmarkByID)
+	getFolder := bookmarkAPI.Secure(bookmarkAPI.GetBookmarksFolderByPath)
+	getByPath := bookmarkAPI.Secure(bookmarkAPI.GetBookmarksByPath)
+
+	r := chi.NewRouter()
+	r.Use(jwtUser)
+	r.Post(url, create)
+	r.Delete(url+"/{id}", delete)
+	r.Get(url+"/{id}", getBookmark)
+	r.Get(url+"/folder", getFolder)
+	r.Get(url+"/bypath", getByPath)
+
+	// create folder hierarchy
+	// /Folder
+	//     /Folder1
+	// ---------------------------------------------------------------
+
+	payload := `{
+		"displayName": "%s",
+		"path": "%s",
+		"type": "Folder"
+	}`
+
+	// /Folder
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", url, strings.NewReader(fmt.Sprintf(payload, "Folder", "/")))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// /Folder/Folder1
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", url, strings.NewReader(fmt.Sprintf(payload, "Folder1", "/Folder")))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// get the folder /Folder
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", url+"/folder?path="+"/Folder", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var bookmarkFolder BookmarResultResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &bookmarkFolder); err != nil {
+		t.Errorf("could not unmarshal: %v", err)
+	}
+	id := bookmarkFolder.Value.ID
+
+	// delete the created item
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("DELETE", url+"/"+id, nil)
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
+func TestUpdateSortOrder(t *testing.T) {
+
+	repo, db := repository(t)
+	defer db.Close()
+
+	// arrange
+	bookmarkAPI := &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: repo,
+	}
+	url := "/api/v1/bookmarks"
+
+	mockAPI := &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: &MockRepository{fail: true},
+	}
+
+	// validation
+	// ---------------------------------------------------------------
+	tt := []struct {
+		name     string
+		payload  string
+		status   int
+		function http.HandlerFunc
+	}{
+		{
+			name:     "invalid",
+			payload:  "{}",
+			status:   http.StatusBadRequest,
+			function: mockAPI.Secure(mockAPI.UpdateSortOrder),
+		},
+		{
+			name: "unbalanced",
+			payload: `{
+				"ids": ["1","2"],
+				"sortOrder": [1,2,3]
+			}`,
+			status:   http.StatusBadRequest,
+			function: mockAPI.Secure(mockAPI.UpdateSortOrder),
+		},
+	}
+	for _, tc := range tt {
+		r := chi.NewRouter()
+		r.Use(jwtUser)
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			var result ResultResponse
+
+			// act
+			r.Put(url+"/sortorder", tc.function)
+			req, _ := http.NewRequest("PUT", url+"/sortorder", strings.NewReader(tc.payload))
+			req.Header.Add("Content-Type", "application/json")
+			r.ServeHTTP(rec, req)
+
+			// assert
+			assert.Equal(t, tc.status, rec.Code)
+			if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+				t.Errorf("could not unmarshal: %v", err)
+			}
+		})
+	}
+
+	create := bookmarkAPI.Secure(bookmarkAPI.Create)
+	updateSortOrder := bookmarkAPI.Secure(bookmarkAPI.UpdateSortOrder)
+	get := bookmarkAPI.Secure(bookmarkAPI.GetBookmarkByID)
+	getByPath := bookmarkAPI.Secure(bookmarkAPI.GetBookmarksByPath)
+
+	r := chi.NewRouter()
+	r.Use(jwtUser)
+	r.Post(url, create)
+	r.Put(url+"/sortorder", updateSortOrder)
+	r.Get(url+"/{id}", get)
+	r.Get(url+"/bypath", getByPath)
+
+	payload := `{
+		"displayName": "%s",
+		"path": "/",
+		"type": "Node",
+		"url": "http://url"
+	}`
+
+	var result ResultResponse
+	// create A
+	// ---------------------------------------------------------------
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", url, strings.NewReader(fmt.Sprintf(payload, "A")))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Errorf("could not unmarshal: %v", err)
+	}
+	id1 := result.Value
+
+	// create B
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", url, strings.NewReader(fmt.Sprintf(payload, "B")))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Errorf("could not unmarshal: %v", err)
+	}
+	id2 := result.Value
+
+	// get the bookmarks
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", url+"/bypath?path=/", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var list BookmarkListResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Errorf("could not unmarshal: %v", err)
+	}
+
+	assert.Equal(t, 2, len(list.Value))
+	assert.Equal(t, "A", list.Value[0].DisplayName)
+	assert.Equal(t, "B", list.Value[1].DisplayName)
+
+	// change the sorting
+	// ---------------------------------------------------------------
+	newOrder := BookmarksSortOrder{
+		IDs:       []string{id1, id2},
+		SortOrder: []int{10, 1},
+	}
+	bytesPayload, _ := json.Marshal(newOrder)
+
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("PUT", url+"/sortorder", bytes.NewReader(bytesPayload))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Errorf("could not unmarshal: %v", err)
+	}
+
+	// get the bookmarks again
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", url+"/bypath?path=/", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Errorf("could not unmarshal: %v", err)
+	}
+
+	assert.Equal(t, 2, len(list.Value))
+	assert.Equal(t, "B", list.Value[0].DisplayName)
+	assert.Equal(t, "A", list.Value[1].DisplayName)
+
+	// change the sorting, but with wrong ID
+	// ---------------------------------------------------------------
+	newOrder = BookmarksSortOrder{
+		IDs:       []string{"A"},
+		SortOrder: []int{1},
+	}
+	bytesPayload, _ = json.Marshal(newOrder)
+
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("PUT", url+"/sortorder", bytes.NewReader(bytesPayload))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }

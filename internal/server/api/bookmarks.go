@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/bihe/bookmarks/internal/store"
 	"github.com/bihe/commons-go/errors"
@@ -318,4 +319,399 @@ func (b *BookmarksAPI) GetMostVisited(user security.User, w http.ResponseWriter,
 	}
 
 	return render.Render(w, r, BookmarkListResponse{BookmarkList: &result})
+}
+
+// swagger:operation POST /api/v1/bookmarks bookmarks CreateBookmark
+//
+// create a bookmark
+//
+// use the supplied payload to create a new bookmark
+//
+// ---
+// consumes:
+// - application/json
+// produces:
+// - application/json
+// responses:
+//   '200':
+//     description: Result
+//     schema:
+//       "$ref": "#/definitions/Result"
+//   '400':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '401':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '403':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+func (b *BookmarksAPI) Create(user security.User, w http.ResponseWriter, r *http.Request) error {
+	var (
+		id      string
+		payload *BookmarkRequest
+		t       store.NodeType
+	)
+
+	payload = &BookmarkRequest{}
+	if err := render.Bind(r, payload); err != nil {
+		handler.LogFunction("api.Create").Warnf("cannot bind payload: '%v'", err)
+		return errors.BadRequestError{Err: fmt.Errorf("invalid request data supplied"), Request: r}
+	}
+
+	if payload.Path == "" || payload.DisplayName == "" {
+		handler.LogFunction("api.Create").Warnf("required fields of bookmarks missing")
+		return errors.BadRequestError{Err: fmt.Errorf("invalid request data supplied, missing Path or DisplayName"), Request: r}
+	}
+
+	handler.LogFunction("api.Create").Debugf("will try to create a new bookmark entry: '%s'", payload)
+
+	t = store.Node
+	if payload.Type == Folder {
+		t = store.Folder
+	}
+
+	if err := b.Repository.InUnitOfWork(func(repo store.Repository) error {
+		item, err := repo.Create(store.Bookmark{
+			DisplayName: payload.DisplayName,
+			Path:        payload.Path,
+			Type:        t,
+			URL:         payload.URL,
+			UserName:    user.Username,
+			Favicon:     payload.Favicon,
+			SortOrder:   payload.SortOrder,
+		})
+		if err != nil {
+			return err
+		}
+		id = item.ID
+		return nil
+	}); err != nil {
+		handler.LogFunction("api.Create").Errorf("could not create a new bookmark: %v", err)
+		return errors.ServerError{Err: fmt.Errorf("error creating a new bookmark: %v", err), Request: r}
+	}
+
+	handler.LogFunction("api.Create").Infof("bookmark created with ID: %s", id)
+	return render.Render(w, r, ResultResponse{
+		Result: &Result{
+			Success: true,
+			Message: fmt.Sprintf("Bookmark created with ID '%s'", id),
+			Value:   id,
+		},
+		Status: http.StatusCreated,
+	})
+}
+
+// swagger:operation PUT /api/v1/bookmarks bookmarks UpdateBookmark
+//
+// update a bookmark
+//
+// use the supplied payload to update a existing bookmark
+//
+// ---
+// consumes:
+// - application/json
+// produces:
+// - application/json
+// responses:
+//   '200':
+//     description: Result
+//     schema:
+//       "$ref": "#/definitions/Result"
+//   '400':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '401':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '403':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+func (b *BookmarksAPI) Update(user security.User, w http.ResponseWriter, r *http.Request) error {
+	var (
+		id      string
+		payload *BookmarkRequest
+	)
+
+	payload = &BookmarkRequest{}
+	if err := render.Bind(r, payload); err != nil {
+		handler.LogFunction("api.Update").Warnf("cannot bind payload: '%v'", err)
+		return errors.BadRequestError{Err: fmt.Errorf("invalid request data supplied"), Request: r}
+	}
+
+	if payload.Path == "" || payload.DisplayName == "" || payload.ID == "" {
+		handler.LogFunction("api.Update").Warnf("required fields of bookmarks missing")
+		return errors.BadRequestError{Err: fmt.Errorf("invalid request data supplied, missing ID, Path or DisplayName"), Request: r}
+
+	}
+
+	handler.LogFunction("api.Update").Debugf("will try to update existing bookmark entry: '%s'", payload)
+
+	if err := b.Repository.InUnitOfWork(func(repo store.Repository) error {
+		// 1) fetch the existing bookmark by id
+		existing, err := repo.GetBookmarkById(payload.ID, user.Username)
+		if err != nil {
+			handler.LogFunction("api.Update").Warnf("could not find bookmark by id '%s': %v", payload.ID, err)
+			return err
+		}
+		childCount := existing.ChildCount
+		if existing.Type == store.Folder {
+			// 2) get the folder child-count
+			// on save of a folder, update the child-count
+			parentPath := existing.Path
+			path := ensureFolderPath(parentPath, existing.DisplayName)
+			nodeCount, err := repo.GetPathChildCount(path, user.Username)
+			if err != nil {
+				handler.LogFunction("api.Update").Warnf("could not get child-count of path '%s': %v", path, err)
+				return err
+			}
+			if len(nodeCount) > 0 {
+				for _, n := range nodeCount {
+					if n.Path == path {
+						childCount = n.Count
+						break
+					}
+				}
+			}
+		}
+
+		existingDisplayName := existing.DisplayName
+		existingPath := existing.Path
+
+		// 3) update the bookmark
+		item, err := repo.Update(store.Bookmark{
+			ID:          payload.ID,
+			Created:     existing.Created,
+			DisplayName: payload.DisplayName,
+			Path:        payload.Path,
+			Type:        existing.Type, // it does not make any sense to change the type of a bookmark!
+			URL:         payload.URL,
+			SortOrder:   payload.SortOrder,
+			UserName:    user.Username,
+			ChildCount:  childCount,
+			Favicon:     payload.Favicon,
+			AccessCount: payload.AccessCount,
+		})
+		if err != nil {
+			handler.LogFunction("api.Update").Warnf("could not update bookmark: %v", err)
+			return err
+		}
+		id = item.ID
+
+		if existing.Type == store.Folder && existingDisplayName != payload.DisplayName {
+			// if we have a folder and change the displayname this also affects ALL sub-elements
+			// therefore all paths of sub-elements where this folder-path is present, need to be updated
+			newPath := ensureFolderPath(payload.Path, payload.DisplayName)
+			oldPath := ensureFolderPath(existingPath, existingDisplayName)
+
+			handler.LogFunction("api.Update").Warnf("will update all old paths '%s' to new path '%s'", oldPath, newPath)
+
+			bookmarks, err := repo.GetBookmarksByPathStart(oldPath, user.Username)
+			if err != nil {
+				handler.LogFunction("api.Update").Warnf("could not get bookmarks by path '%s': %v", oldPath, err)
+				return err
+			}
+
+			for _, bm := range bookmarks {
+				updatePath := strings.ReplaceAll(bm.Path, oldPath, newPath)
+				if _, err := repo.Update(store.Bookmark{
+					ID:          bm.ID,
+					Created:     bm.Created,
+					DisplayName: bm.DisplayName,
+					Path:        updatePath,
+					SortOrder:   bm.SortOrder,
+					Type:        bm.Type,
+					URL:         bm.URL,
+					UserName:    user.Username,
+					ChildCount:  bm.ChildCount,
+					AccessCount: bm.AccessCount,
+					Favicon:     bm.Favicon,
+				}); err != nil {
+					handler.LogFunction("api.Update").Warnf("cannot update bookmark path: %v", err)
+					return err
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		handler.LogFunction("api.Update").Errorf("could not update bookmark because of error: %v", err)
+		return errors.ServerError{Err: fmt.Errorf("error updating bookmark: %v", err), Request: r}
+	}
+
+	handler.LogFunction("api.Update").Infof("updated bookmark with ID '%s'", id)
+
+	return render.Render(w, r, ResultResponse{
+		Result: &Result{
+			Success: true,
+			Message: fmt.Sprintf("Bookmark with ID '%s' was updated", id),
+			Value:   id,
+		},
+	})
+}
+
+// swagger:operation Delete /api/v1/bookmarks/{id} bookmarks DeleteBookmark
+//
+// delete a bookmark
+//
+// delete the bookmark identified by the supplied id
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+// responses:
+//   '200':
+//     description: Result
+//     schema:
+//       "$ref": "#/definitions/Result"
+//   '400':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '401':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '403':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+func (b *BookmarksAPI) Delete(user security.User, w http.ResponseWriter, r *http.Request) error {
+	id := chi.URLParam(r, "id")
+
+	if id == "" {
+		return errors.BadRequestError{Err: fmt.Errorf("missing id parameter"), Request: r}
+	}
+
+	handler.LogFunction("api.Delete").Debugf("will try to delete bookmark with ID '%s'", id)
+
+	if err := b.Repository.InUnitOfWork(func(repo store.Repository) error {
+		// 1) fetch the existing bookmark by id
+		existing, err := repo.GetBookmarkById(id, user.Username)
+		if err != nil {
+			handler.LogFunction("api.Update").Warnf("could not find bookmark by id '%s': %v", id, err)
+			return err
+		}
+
+		// if the element is a folder and there are child-elements
+		// prevent the deletion - this can only be done via a recursive deletion like rm -rf
+		if existing.Type == store.Folder && existing.ChildCount > 0 {
+			return fmt.Errorf("cannot delete folder '%s' because of existing child-elements %d",
+				ensureFolderPath(existing.Path, existing.DisplayName), existing.ChildCount)
+		}
+
+		err = repo.Delete(existing)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		handler.LogFunction("api.Delete").Errorf("could not delete bookmark because of error: %v", err)
+		return errors.ServerError{Err: fmt.Errorf("error deleting bookmark: %v", err), Request: r}
+	}
+
+	return render.Render(w, r, ResultResponse{
+		Result: &Result{
+			Success: true,
+			Message: fmt.Sprintf("Bookmark with ID '%s' was deleted", id),
+			Value:   id,
+		},
+	})
+}
+
+// swagger:operation PUT /api/v1/bookmarks/sortorder bookmarks UpdateSortOrder
+//
+// change the sortorder of bookmarks
+//
+// provide a new sortorder for a list of IDS
+//
+// ---
+// consumes:
+// - application/json
+// produces:
+// - application/json
+// responses:
+//   '200':
+//     description: Result
+//     schema:
+//       "$ref": "#/definitions/Result"
+//   '400':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '401':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '403':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+func (b *BookmarksAPI) UpdateSortOrder(user security.User, w http.ResponseWriter, r *http.Request) error {
+	payload := &BookmarksSortOrderRequest{}
+	if err := render.Bind(r, payload); err != nil {
+		handler.LogFunction("api.UpdateSortOrder").Errorf("cannot bind payload: '%v'", err)
+		return errors.BadRequestError{Err: fmt.Errorf("invalid request data supplied"), Request: r}
+	}
+
+	if len(payload.IDs) != len(payload.SortOrder) {
+		handler.LogFunction("api.UpdateSortOrder").Errorf("ids and sortorders do not match!")
+		return errors.BadRequestError{Err: fmt.Errorf("invalid request data supplied, IDs and SortOrder do not match"), Request: r}
+	}
+
+	var updates int
+	if err := b.Repository.InUnitOfWork(func(repo store.Repository) error {
+		for i, item := range payload.IDs {
+			bm, err := repo.GetBookmarkById(item, user.Username)
+			if err != nil {
+				handler.LogFunction("api.UpdateSortOrder").Errorf("could not get bookmark by id '%s', %v", item, err)
+				return err
+			}
+
+			handler.LogFunction("api.UpdateSortOrder").Debugf("will update sortOrder of bookmark '%s' with value %d", bm.DisplayName, payload.SortOrder[i])
+			bm.SortOrder = payload.SortOrder[i]
+			_, err = repo.Update(bm)
+			if err != nil {
+				handler.LogFunction("api.UpdateSortOrder").Errorf("could not update bookmark: %v", err)
+				return err
+			}
+			updates += 1
+		}
+		return nil
+	}); err != nil {
+		handler.LogFunction("api.UpdateSortOrder").Errorf("could not update the sortorder for bookmark: %v", err)
+		return errors.ServerError{Err: fmt.Errorf("error updating sortorder of bookmark: %v", err), Request: r}
+	}
+
+	return render.Render(w, r, ResultResponse{
+		Result: &Result{
+			Success: true,
+			Message: fmt.Sprintf("Updated '%d' bookmark items.", updates),
+			Value:   fmt.Sprintf("%d", updates),
+		},
+	})
+}
+
+// EnsureFolderPath takes care that the supplied path is valid
+// e.g. it does not start with two slashes '//' and that the resulting
+// path is valid, with all necessary delimitors
+func ensureFolderPath(path, displayName string) string {
+	folderPath := path
+	if !strings.HasSuffix(path, "/") {
+		folderPath = path + "/"
+	}
+	if strings.HasPrefix(folderPath, "//") {
+		folderPath = strings.ReplaceAll(folderPath, "//", "/")
+	}
+	folderPath += displayName
+	return folderPath
 }

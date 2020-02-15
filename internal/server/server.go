@@ -68,7 +68,10 @@ func Create(basePath string, config config.AppConfig, version internal.VersionIn
 		Secure: config.Cookies.Secure,
 		Prefix: config.Cookies.Prefix,
 	}
-	errorReporter := errors.NewReporter(cookieSettings, config.ErrorPath)
+	errorReporter := &errors.ErrorReporter{
+		CookieSettings: cookieSettings,
+		ErrorPath:      config.ErrorPath,
+	}
 	baseHandler := handler.Handler{
 		ErrRep: errorReporter,
 	}

@@ -3,7 +3,11 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/go-chi/render"
 )
 
 // --------------------------------------------------------------------------
@@ -42,12 +46,43 @@ type BookmarkList struct {
 	Value   []Bookmark `json:"value"`
 }
 
-// BookmarkResult hast additional information about a Bookmark
+// BookmarkResult has additional information about a Bookmark
 // swagger:model
 type BookmarkResult struct {
 	Success bool     `json:"success"`
 	Message string   `json:"message"`
 	Value   Bookmark `json:"value"`
+}
+
+// Result is a generic response with a string value
+// swagger:model
+type Result struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Value   string `json:"value"`
+}
+
+// BookmarksSortOrder contains a sorting for a list of ids
+// swagger:model
+type BookmarksSortOrder struct {
+	IDs       []string `json:"ids"`
+	SortOrder []int    `json:"sortOrder"`
+}
+
+// --------------------------------------------------------------------------
+// Swagger specific definitions
+// --------------------------------------------------------------------------
+
+// swagger:parameters CreateBookmark UpdateBookmark
+type BookMarkRequestSwagger struct {
+	// In: body
+	Body Bookmark
+}
+
+// swagger:parameters UpdateSortOrder
+type BookmarksSortOrderRequestSwagger struct {
+	// In: body
+	Body BookmarksSortOrder
 }
 
 // --------------------------------------------------------------------------
@@ -67,6 +102,37 @@ func (b *BookmarkRequest) Bind(r *http.Request) error {
 		return fmt.Errorf("missing required Bookmarks fields")
 	}
 	return nil
+}
+
+// String returns a string representation of a BookmarkRequest
+func (b *BookmarkRequest) String() string {
+	return fmt.Sprintf("Bookmark: '%s, %s' (Id: %s, Type: %s)", b.Path, b.DisplayName, b.ID, b.Type)
+}
+
+// --------------------------------------------------------------------------
+// BookmarksSortOrderRequest
+// --------------------------------------------------------------------------
+
+// BookmarksSortOrderRequest is the request payload for Bookmark data model.
+type BookmarksSortOrderRequest struct {
+	*BookmarksSortOrder
+}
+
+// Bind assigns the the provided data to a BookmarksSortOrderRequest
+func (b *BookmarksSortOrderRequest) Bind(r *http.Request) error {
+	if b.BookmarksSortOrder == nil {
+		return fmt.Errorf("missing required BookmarksSortOrder fields")
+	}
+	return nil
+}
+
+// String returns a string representation of a BookmarkRequest
+func (b *BookmarksSortOrderRequest) String() string {
+	var order []string
+	for i := range b.SortOrder {
+		order = append(order, strconv.Itoa(i))
+	}
+	return fmt.Sprintf("IDs: '%s', SortOrder: %s", strings.Join(b.IDs, ","), strings.Join(order, ","))
 }
 
 // --------------------------------------------------------------------------
@@ -111,5 +177,25 @@ type BookmarResultResponse struct {
 // Render the specific response
 func (b BookmarResultResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	// Pre-processing before a response is marshalled and sent across the wire
+	return nil
+}
+
+// --------------------------------------------------------------------------
+// ResultResponse
+// --------------------------------------------------------------------------
+
+// ResultResponse returns Result
+type ResultResponse struct {
+	*Result
+	Status int `json:"-"` // ignore this
+}
+
+// Render the specific response
+func (b ResultResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	if b.Status == 0 {
+		render.Status(r, http.StatusOK)
+	} else {
+		render.Status(r, b.Status)
+	}
 	return nil
 }

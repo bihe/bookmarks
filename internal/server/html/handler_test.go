@@ -18,13 +18,14 @@ func TestErrorPage(t *testing.T) {
 	cookieSettings := cookies.Settings{
 		Path:   "/",
 		Domain: "localhost",
-		Secure: false,
-		Prefix: "test",
 	}
 
 	errHandler := &TemplateHandler{
 		Handler: handler.Handler{
-			ErrRep: errors.NewReporter(cookieSettings, "error"),
+			ErrRep: &errors.ErrorReporter{
+				CookieSettings: cookieSettings,
+				ErrorPath:      "error",
+			},
 		},
 		Version:        "1",
 		Build:          "2",

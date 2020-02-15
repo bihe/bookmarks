@@ -36,6 +36,10 @@ func (m *mockRepository) GetBookmarksByPath(path, username string) ([]store.Book
 	return nil, nil
 }
 
+func (m *mockRepository) GetBookmarksByPathStart(path, username string) ([]store.Bookmark, error) {
+	return nil, nil
+}
+
 func (m *mockRepository) GetBookmarksByName(name, username string) ([]store.Bookmark, error) {
 	return nil, nil
 }

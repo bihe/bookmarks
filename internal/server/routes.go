@@ -36,16 +36,19 @@ func (s *Server) routes() {
 		// authenticate and authorize users via JWT
 		r.Use(security.NewJwtMiddleware(s.jwtOpts, s.cookieSettings).JwtContext)
 
-		// group API methods together
-		r.Route("/api/v1", func(r chi.Router) {
-			r.Get("/appinfo", s.appInfoAPI.Secure(s.appInfoAPI.HandleAppInfo))
+		r.Get("/appinfo", s.appInfoAPI.Secure(s.appInfoAPI.HandleAppInfo))
 
-			// bookmarks API
-			r.Get("/bookmarks/{id}", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarkByID))
-			r.Get("/bookmarks/bypath", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarksByPath))
-			r.Get("/bookmarks/folder", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarksFolderByPath))
-			r.Get("/bookmarks/byname", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarksByName))
-			r.Get("/bookmarks/mostvisited/{num}", s.bookmarkAPI.Secure(s.bookmarkAPI.GetMostVisited))
+		// group API methods together
+		r.Route("/api/v1/bookmarks", func(r chi.Router) {
+			r.Post("/", s.bookmarkAPI.Secure(s.bookmarkAPI.Create))
+			r.Put("/", s.bookmarkAPI.Secure(s.bookmarkAPI.Update))
+			r.Put("/sortorder", s.bookmarkAPI.Secure(s.bookmarkAPI.UpdateSortOrder))
+			r.Delete("/{id}", s.bookmarkAPI.Secure(s.bookmarkAPI.Delete))
+			r.Get("/{id}", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarkByID))
+			r.Get("/bypath", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarksByPath))
+			r.Get("/folder", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarksFolderByPath))
+			r.Get("/byname", s.bookmarkAPI.Secure(s.bookmarkAPI.GetBookmarksByName))
+			r.Get("/mostvisited/{num}", s.bookmarkAPI.Secure(s.bookmarkAPI.GetMostVisited))
 		})
 		// the SPA
 		handler.ServeStaticDir(r, "/ui", http.Dir(filepath.Join(s.basePath, "./assets/ui")))

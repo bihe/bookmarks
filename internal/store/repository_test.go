@@ -626,6 +626,15 @@ func TestGetBookmarksByPath(t *testing.T) {
 	if err != nil {
 		t.Errorf(errStr, err)
 	}
+	_, err = repo.Create(Bookmark{
+		Type:        Folder,
+		DisplayName: "Folder2",
+		UserName:    userName,
+		Path:        "/Folder/Folder1",
+	})
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
 
 	bookmarks, err := repo.GetBookmarksByPath("/", userName)
 	if err != nil {
@@ -641,6 +650,14 @@ func TestGetBookmarksByPath(t *testing.T) {
 	}
 	assert.Equal(t, 1, len(bookmarks))
 	assert.Equal(t, "Folder1", bookmarks[0].DisplayName)
+
+	bookmarks, err = repo.GetBookmarksByPathStart("/Folder", userName)
+	if err != nil {
+		t.Errorf(errStr, err)
+	}
+	assert.Equal(t, 2, len(bookmarks))
+	assert.Equal(t, "Folder1", bookmarks[0].DisplayName)
+	assert.Equal(t, "Folder2", bookmarks[1].DisplayName)
 }
 
 func TestGetBookmarksByName(t *testing.T) {

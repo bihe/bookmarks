@@ -24,6 +24,7 @@ type Repository interface {
 
 	GetAllBookmarks(username string) ([]Bookmark, error)
 	GetBookmarksByPath(path, username string) ([]Bookmark, error)
+	GetBookmarksByPathStart(path, username string) ([]Bookmark, error)
 	GetBookmarksByName(name, username string) ([]Bookmark, error)
 	GetMostRecentBookmarks(username string, limit int) ([]Bookmark, error)
 	GetPathChildCount(path, username string) ([]NodeCount, error)
@@ -80,6 +81,17 @@ func (r *dbRepository) GetBookmarksByPath(path, username string) ([]Bookmark, er
 		UserName: username,
 		Path:     path,
 	}).Find(&bookmarks)
+	return bookmarks, h.Error
+}
+
+// GetBookmarksByPathStart return the bookmark elements which path starts with
+func (r *dbRepository) GetBookmarksByPathStart(path, username string) ([]Bookmark, error) {
+	var bookmarks []Bookmark
+	h := r.con().
+		Order("type desc").
+		Order("sort_order").
+		Order("display_name").
+		Where("user_name = ? AND path LIKE ?", username, path+"%").Find(&bookmarks)
 	return bookmarks, h.Error
 }
 
