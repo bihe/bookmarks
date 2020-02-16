@@ -775,3 +775,58 @@ func TestGetMostRecentBookmarks(t *testing.T) {
 	assert.Equal(t, 1, len(recent))
 	assert.Equal(t, "Node1", recent[0].DisplayName)
 }
+
+func TestGetAllPath(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	userName := "username"
+
+	if _, err := repo.Create(Bookmark{
+		DisplayName: "Z",
+		Path:        "/",
+		SortOrder:   0,
+		Type:        Folder,
+		UserName:    userName,
+	}); err != nil {
+		t.Errorf("Could not create bookmarks: %v", err)
+	}
+
+	if _, err := repo.Create(Bookmark{
+		DisplayName: "A",
+		Path:        "/",
+		SortOrder:   0,
+		Type:        Folder,
+		UserName:    userName,
+	}); err != nil {
+		t.Errorf("Could not create bookmarks: %v", err)
+	}
+
+	if _, err := repo.Create(Bookmark{
+		DisplayName: "B",
+		Path:        "/A",
+		SortOrder:   0,
+		Type:        Folder,
+		UserName:    userName,
+	}); err != nil {
+		t.Errorf("Could not create bookmarks: %v", err)
+	}
+
+	if _, err := repo.Create(Bookmark{
+		DisplayName: "A",
+		Path:        "/Z",
+		SortOrder:   0,
+		Type:        Folder,
+		UserName:    userName,
+	}); err != nil {
+		t.Errorf("Could not create bookmarks: %v", err)
+	}
+
+	paths, err := repo.GetAllPaths(userName)
+	if err != nil {
+		t.Errorf("cannot get all paths: %v", err)
+	}
+
+	assert.Equal(t, 5, len(paths))
+
+}

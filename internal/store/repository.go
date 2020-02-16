@@ -28,6 +28,7 @@ type Repository interface {
 	GetBookmarksByName(name, username string) ([]Bookmark, error)
 	GetMostRecentBookmarks(username string, limit int) ([]Bookmark, error)
 	GetPathChildCount(path, username string) ([]NodeCount, error)
+	GetAllPaths(username string) ([]string, error)
 
 	GetBookmarkById(id, username string) (Bookmark, error)
 	GetFolderByPath(path, username string) (Bookmark, error)
@@ -50,7 +51,7 @@ type dbRepository struct {
 	shared    *gorm.DB
 }
 
-// InUnitOfWork uses a trancation to execute the contents of the supplied function
+// InUnitOfWork uses a transaction to execute the supplied function
 func (r *dbRepository) InUnitOfWork(fn func(repo Repository) error) error {
 	return r.con().Transaction(func(tx *gorm.DB) error {
 		// be sure the stop recursion here
@@ -159,6 +160,11 @@ func (r *dbRepository) GetPathChildCount(path, username string) ([]NodeCount, er
 	}
 
 	return nodes, nil
+}
+
+// GetAllPaths returns all available paths for the given username
+func (r *dbRepository) GetAllPaths(username string) ([]string, error) {
+	return r.availablePaths(username)
 }
 
 // modify data

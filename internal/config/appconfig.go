@@ -2,58 +2,61 @@
 package config
 
 import (
-	"encoding/json"
 	"io"
 	"io/ioutil"
+
+	"gopkg.in/yaml.v2"
 )
 
 // AppConfig holds the application configuration
 type AppConfig struct {
-	Sec         Security           `json:"security"`
-	DB          Database           `json:"database"`
-	Log         LogConfig          `json:"logging"`
-	Cookies     ApplicationCookies `json:"cookies"`
-	ErrorPath   string             `json:"errorPath"`
-	StartURL    string             `json:"startUrl"`
-	Environment string             `json:"environment"`
+	Sec            Security           `yaml:"security"`
+	DB             Database           `yaml:"database"`
+	Log            LogConfig          `yaml:"logging"`
+	Cookies        ApplicationCookies `yaml:"cookies"`
+	ErrorPath      string             `yaml:"errorPath"`
+	StartURL       string             `yaml:"startUrl"`
+	Environment    string             `yaml:"environment"`
+	FaviconPath    string             `yaml:"faviconUploadPath"`
+	DefaultFavicon string             `yaml:"defaultFavicon"`
 }
 
 // Security settings for the application
 type Security struct {
-	JwtIssuer     string `json:"jwtIssuer"`
-	JwtSecret     string `json:"jwtSecret"`
-	CookieName    string `json:"cookieName"`
-	LoginRedirect string `json:"loginRedirect"`
-	Claim         Claim  `json:"claim"`
-	CacheDuration string `json:"cacheDuration"`
+	JwtIssuer     string `yaml:"jwtIssuer"`
+	JwtSecret     string `yaml:"jwtSecret"`
+	CookieName    string `yaml:"cookieName"`
+	LoginRedirect string `yaml:"loginRedirect"`
+	Claim         Claim  `yaml:"claim"`
+	CacheDuration string `yaml:"cacheDuration"`
 }
 
 // Database defines the connection string
 type Database struct {
-	ConnStr string `json:"connectionString"`
-	Dialect string `json:"dialect"`
+	ConnStr string `yaml:"connectionString"`
+	Dialect string `yaml:"dialect"`
 }
 
 // Claim defines the required claims
 type Claim struct {
-	Name  string   `json:"name"`
-	URL   string   `json:"url"`
-	Roles []string `json:"roles"`
+	Name  string   `yaml:"name"`
+	URL   string   `yaml:"url"`
+	Roles []string `yaml:"roles"`
 }
 
 // LogConfig is used to define settings for the logging process
 type LogConfig struct {
-	FilePath    string `json:"filePath"`
-	RequestPath string `json:"requestPath"`
-	LogLevel    string `json:"logLevel"`
+	FilePath    string `yaml:"filePath"`
+	RequestPath string `yaml:"requestPath"`
+	LogLevel    string `yaml:"logLevel"`
 }
 
 // ApplicationCookies defines values for cookies
 type ApplicationCookies struct {
-	Domain string `json:"domain"`
-	Path   string `json:"path"`
-	Secure bool   `json:"secure"`
-	Prefix string `json:"prefix"`
+	Domain string `yaml:"domain"`
+	Path   string `yaml:"path"`
+	Secure bool   `yaml:"secure"`
+	Prefix string `yaml:"prefix"`
 }
 
 // GetSettings returns application configuration values
@@ -66,7 +69,7 @@ func GetSettings(r io.Reader) (*AppConfig, error) {
 	if cont, err = ioutil.ReadAll(r); err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(cont, &c); err != nil {
+	if err := yaml.Unmarshal(cont, &c); err != nil {
 		return nil, err
 	}
 

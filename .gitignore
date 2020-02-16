@@ -12,5 +12,7 @@
 *.out
 
 .env
-etc/application.json
 _etc/application.json
+_etc/application.yaml
+
+_uploads/

@@ -59,3 +59,7 @@ func (m *mockRepository) GetBookmarkById(id, username string) (store.Bookmark, e
 func (m *mockRepository) GetFolderByPath(path, username string) (store.Bookmark, error) {
 	return store.Bookmark{}, nil
 }
+
+func (m *mockRepository) GetAllPaths(username string) ([]string, error) {
+	return nil, nil
+}

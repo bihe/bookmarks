@@ -121,6 +121,51 @@
         }
       }
     },
+    "/api/v1/bookmarks/allpaths": {
+      "get": {
+        "description": "determine all available paths for the given user",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "bookmarks"
+        ],
+        "summary": "return all paths",
+        "operationId": "GetAllPaths",
+        "responses": {
+          "200": {
+            "description": "BookmarksPathsResponse",
+            "schema": {
+              "$ref": "#/definitions/BookmarksPathsResponse"
+            }
+          },
+          "400": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          },
+          "401": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          },
+          "403": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          },
+          "404": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/bookmarks/byname": {
       "get": {
         "description": "search for bookmarks by name and return a list of search-results",
@@ -211,7 +256,97 @@
         }
       }
     },
-    "/api/v1/bookmarks/foolder": {
+    "/api/v1/bookmarks/favicon": {
+      "get": {
+        "description": "return the stored favicon for the given bookmark or return the default favicon",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "bookmarks"
+        ],
+        "summary": "get the favicon from bookmark",
+        "operationId": "GetFavicon",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Favicon as a file"
+          },
+          "400": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          },
+          "401": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          },
+          "403": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bookmarks/fetch": {
+      "get": {
+        "description": "fetch the URL of the specified bookmark and forward to the destination",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "bookmarks"
+        ],
+        "summary": "forward to the bookmark",
+        "operationId": "FetchAndForward",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Found, redirect to URL"
+          },
+          "400": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          },
+          "401": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          },
+          "403": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          },
+          "404": {
+            "description": "ProblemDetail",
+            "schema": {
+              "$ref": "#/definitions/ProblemDetail"
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bookmarks/folder": {
       "get": {
         "description": "returns the folder identified by the given path",
         "produces": [
@@ -577,6 +712,23 @@
         },
         "value": {
           "$ref": "#/definitions/Bookmark"
+        }
+      },
+      "x-go-package": "github.com/bihe/bookmarks/internal/server/api"
+    },
+    "BookmarksPathsResponse": {
+      "description": "BookmarksPathsResponse returns available Paths",
+      "type": "object",
+      "properties": {
+        "Count": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "Paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "x-go-package": "github.com/bihe/bookmarks/internal/server/api"

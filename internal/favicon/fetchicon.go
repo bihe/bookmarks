@@ -14,6 +14,7 @@ import (
 
 const DefaultFaviconName = "favicon.ico"
 
+// GetFaviconFromURL tries to find and fetch the favicon from the given URL
 func GetFaviconFromURL(url string) (fileName string, payload []byte, err error) {
 	var (
 		scheme  string
@@ -50,6 +51,10 @@ func GetFaviconFromURL(url string) (fileName string, payload []byte, err error) 
 		// local to the page-URL
 		iconURL = strings.ReplaceAll(iconURL, "./", "/")
 		iconURL = pageURL + iconURL
+	} else if !strings.HasPrefix(iconURL, "http") {
+		// if a file without anything is specified "favicon.png"
+		// then use the pageurl
+		iconURL = pageURL + iconURL
 	}
 
 	if payload, err = fetchURL(iconURL); err != nil {
@@ -65,7 +70,13 @@ func parseURL(uri string) (scheme, baseURL, pageURL string, err error) {
 	if err != nil {
 		return "", "", "", fmt.Errorf("could not parse the supplied uri: %v", err)
 	}
-	return u.Scheme, fmt.Sprintf("%s://%s", u.Scheme, u.Host), fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path), nil
+	path := u.Path
+	if strings.HasSuffix(path, "index.html") || strings.HasSuffix(path, "index.htm") {
+		path = strings.ReplaceAll(path, "index.html", "")
+		path = strings.ReplaceAll(path, "index.htm", "")
+	}
+
+	return u.Scheme, fmt.Sprintf("%s://%s", u.Scheme, u.Host), fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, path), nil
 }
 
 func parseHtmlPageForFavicon(url string) (iconUrl, fileName string, err error) {

@@ -20,11 +20,19 @@
 package api
 
 import (
+	"crypto/sha1"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"os"
+	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
+	er "errors"
+
+	"github.com/bihe/bookmarks/internal/favicon"
 	"github.com/bihe/bookmarks/internal/store"
 	"github.com/bihe/commons-go/errors"
 	"github.com/bihe/commons-go/handler"
@@ -36,7 +44,10 @@ import (
 // BookmarksAPI implement the handler for the API
 type BookmarksAPI struct {
 	handler.Handler
-	Repository store.Repository
+	Repository     store.Repository
+	BasePath       string
+	FaviconPath    string
+	DefaultFavicon string
 }
 
 // swagger:operation GET /api/v1/bookmarks/{id} bookmarks GetBookmarkByID
@@ -145,7 +156,7 @@ func (b *BookmarksAPI) GetBookmarksByPath(user security.User, w http.ResponseWri
 	return render.Render(w, r, BookmarkListResponse{BookmarkList: &result})
 }
 
-// swagger:operation GET /api/v1/bookmarks/foolder bookmarks GetBookmarksFolderByPath
+// swagger:operation GET /api/v1/bookmarks/folder bookmarks GetBookmarksFolderByPath
 //
 // get bookmark folder by path
 //
@@ -213,6 +224,49 @@ func (b *BookmarksAPI) GetBookmarksFolderByPath(user security.User, w http.Respo
 		Message: fmt.Sprintf("Found bookmark folder for path %s.", path),
 		Value:   *entityToModel(bm),
 	}})
+}
+
+// swagger:operation GET /api/v1/bookmarks/allpaths bookmarks GetAllPaths
+//
+// return all paths
+//
+// determine all available paths for the given user
+//
+// ---
+// produces:
+// - application/json
+// responses:
+//   '200':
+//     description: BookmarksPathsResponse
+//     schema:
+//       "$ref": "#/definitions/BookmarksPathsResponse"
+//   '400':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '404':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '401':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '403':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+func (b *BookmarksAPI) GetAllPaths(user security.User, w http.ResponseWriter, r *http.Request) error {
+	paths, err := b.Repository.GetAllPaths(user.Username)
+	if err != nil {
+		handler.LogFunction("api.GetAllPaths").Warnf("cannot get all bookmark paths: %v", err)
+		return errors.ServerError{Err: fmt.Errorf("cannot get all bookmark paths"), Request: r}
+	}
+
+	return render.Render(w, r, BookmarksPathsResponse{
+		Paths: paths,
+		Count: len(paths),
+	})
 }
 
 // swagger:operation GET /api/v1/bookmarks/byname bookmarks GetBookmarksByName
@@ -504,8 +558,14 @@ func (b *BookmarksAPI) Update(user security.User, w http.ResponseWriter, r *http
 		}
 		id = item.ID
 
-		if existing.Type == store.Folder && existingDisplayName != payload.DisplayName {
-			// if we have a folder and change the displayname this also affects ALL sub-elements
+		// also update the favicon if not available
+		if item.Favicon == "" {
+			// fire&forget, run this in background and do not wait for the result
+			go b.fetchFavicon(item, user)
+		}
+
+		if existing.Type == store.Folder && (existingDisplayName != payload.DisplayName || existingPath != payload.Path) {
+			// if we have a folder and change the displayname or the parent-path, this also affects ALL sub-elements
 			// therefore all paths of sub-elements where this folder-path is present, need to be updated
 			newPath := ensureFolderPath(payload.Path, payload.DisplayName)
 			oldPath := ensureFolderPath(existingPath, existingDisplayName)
@@ -538,6 +598,9 @@ func (b *BookmarksAPI) Update(user security.User, w http.ResponseWriter, r *http
 				}
 			}
 		}
+
+		// TODO: if the path has changed - update the childcount of the changed parent path
+
 		return nil
 	}); err != nil {
 		handler.LogFunction("api.Update").Errorf("could not update bookmark because of error: %v", err)
@@ -699,6 +762,197 @@ func (b *BookmarksAPI) UpdateSortOrder(user security.User, w http.ResponseWriter
 			Value:   fmt.Sprintf("%d", updates),
 		},
 	})
+}
+
+// swagger:operation GET /api/v1/bookmarks/fetch bookmarks FetchAndForward
+//
+// forward to the bookmark
+//
+// fetch the URL of the specified bookmark and forward to the destination
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+// responses:
+//   '302':
+//     description: Found, redirect to URL
+//   '400':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '404':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '401':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '403':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+func (b *BookmarksAPI) FetchAndForward(user security.User, w http.ResponseWriter, r *http.Request) error {
+	id := chi.URLParam(r, "id")
+
+	if id == "" {
+		return errors.BadRequestError{Err: fmt.Errorf("missing id parameter"), Request: r}
+	}
+
+	handler.LogFunction("api.FetchAndForward").Debugf("try to fetch bookmark with ID '%s'", id)
+
+	redirectURL := ""
+	if err := b.Repository.InUnitOfWork(func(repo store.Repository) error {
+		existing, err := repo.GetBookmarkById(id, user.Username)
+		if err != nil {
+			handler.LogFunction("api.FetchAndForward").Warnf("could not find bookmark by id '%s': %v", id, err)
+			return err
+		}
+
+		if existing.Type == store.Folder {
+			handler.LogFunction("api.FetchAndForward").Warnf("accessCount and redirect only valid for Nodes: ID '%s'", id)
+			return errors.BadRequestError{Err: fmt.Errorf("cannot fetch and forward folder - ID '%s'", id), Request: r}
+		}
+
+		// update the access-count of nodes
+		existing.AccessCount += 1
+		if _, err := repo.Update(existing); err != nil {
+			handler.LogFunction("api.FetchAndForward").Warnf("could not update bookmark '%s': %v", id, err)
+			return err
+		}
+
+		redirectURL = existing.URL
+
+		if existing.Favicon == "" {
+			// fire&forget, run this in background and do not wait for the result
+			go b.fetchFavicon(existing, user)
+		}
+		return nil
+	}); err != nil {
+		var badRequest errors.BadRequestError
+		handler.LogFunction("api.FetchAndForward").Errorf("could not fetch and update bookmark by ID '%s': %v", id, err)
+
+		if er.As(err, &badRequest) {
+			return badRequest
+		} else {
+			return errors.ServerError{Err: fmt.Errorf("error fetching and updating bookmark: %v", err), Request: r}
+		}
+	}
+	handler.LogFunction("api.FetchAndForward").Debugf("will redirect to bookmark URL '%s'", redirectURL)
+
+	http.Redirect(w, r, redirectURL, http.StatusFound)
+	return nil
+}
+
+// swagger:operation GET /api/v1/bookmarks/favicon bookmarks GetFavicon
+//
+// get the favicon from bookmark
+//
+// return the stored favicon for the given bookmark or return the default favicon
+//
+// ---
+// produces:
+// - application/json
+// parameters:
+// - name: id
+//   in: path
+// responses:
+//   '200':
+//     description: Favicon as a file
+//   '400':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '401':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+//   '403':
+//     description: ProblemDetail
+//     schema:
+//       "$ref": "#/definitions/ProblemDetail"
+func (b *BookmarksAPI) GetFavicon(user security.User, w http.ResponseWriter, r *http.Request) error {
+	id := chi.URLParam(r, "id")
+
+	if id == "" {
+		return errors.BadRequestError{Err: fmt.Errorf("missing id parameter"), Request: r}
+	}
+
+	handler.LogFunction("api.GetFavicon").Debugf("try to fetch bookmark with ID '%s'", id)
+
+	existing, err := b.Repository.GetBookmarkById(id, user.Username)
+	if err != nil {
+		handler.LogFunction("api.GetFavicon").Errorf("could not find bookmark by id '%s': %v", id, err)
+		return errors.NotFoundError{Err: fmt.Errorf("could not find bookmark with ID '%s'", id), Request: r}
+	}
+
+	fullPath := path.Join(b.BasePath, b.FaviconPath, existing.Favicon)
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		handler.LogFunction("api.GetFavicon").Errorf("the specified favicon '%s' is not available", fullPath)
+		// not found - use default
+		fullPath = path.Join(b.BasePath, b.DefaultFavicon)
+	}
+
+	http.ServeFile(w, r, fullPath)
+	return nil
+}
+
+func (b *BookmarksAPI) fetchFavicon(bm store.Bookmark, user security.User) {
+	favicon, payload, err := favicon.GetFaviconFromURL(bm.URL)
+	if err != nil {
+		handler.LogFunction("api.fetchFavicon").Errorf("cannot fetch favicon from URL '%s': %v", bm.URL, err)
+		return
+	}
+
+	if len(payload) > 0 {
+
+		hashPayload, err := hashInput(payload)
+		if err != nil {
+			handler.LogFunction("api.fetchFavicon").Errorf("could not hash payload: '%v'", err)
+			return
+		}
+		hashFilename, err := hashInput([]byte(favicon))
+		if err != nil {
+			handler.LogFunction("api.fetchFavicon").Errorf("could not hash filename: '%v'", err)
+			return
+		}
+		ext := filepath.Ext(favicon)
+		filename := fmt.Sprintf("%s_%s%s", hashFilename, hashPayload, ext)
+		fullPath := path.Join(b.BasePath, b.FaviconPath, filename)
+
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			handler.LogFunction("api.fetchFavicon").Warnf("got favicon payload length of '%d' for URL '%s'", len(payload), bm.URL)
+
+			if err := ioutil.WriteFile(fullPath, payload, 0644); err != nil {
+				handler.LogFunction("api.fetchFavicon").Errorf("could not write favicon to file '%s': %v", fullPath, err)
+				return
+			}
+		}
+
+		// also update the favicon for the bookmark
+		if err := b.Repository.InUnitOfWork(func(repo store.Repository) error {
+			bm.Favicon = filename
+			_, err := repo.Update(bm)
+			return err
+		}); err != nil {
+			handler.LogFunction("api.fetchFavicon").Errorf("could not update bookmark with favicon '%s': %v", filename, err)
+		}
+
+	} else {
+		handler.LogFunction("api.fetchFavicon").Warnf("not payload for favicon from URL '%s'", bm.URL)
+	}
+}
+
+func hashInput(input []byte) (string, error) {
+	hash := sha1.New()
+	if _, err := hash.Write(input); err != nil {
+		return "", fmt.Errorf("could not hash input: %v", err)
+	}
+	bs := hash.Sum(nil)
+	return fmt.Sprintf("%x", bs), nil
 }
 
 // EnsureFolderPath takes care that the supplied path is valid

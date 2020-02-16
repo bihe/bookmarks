@@ -7,42 +7,45 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const configString = `{
-    "security": {
-        "jwtIssuer": "login.binggl.net",
-        "jwtSecret": "secret",
-	"cookieName": "login_token",
-	"loginRedirect": "https://login.url.com",
-        "claim": {
-            "name": "bookmarks",
-            "url": "http://localhost:3000",
-            "roles": ["User", "Admin"]
-	},
-	"cacheDuration": "10m"
-    },
-    "database": {
-	"connectionString": "./bookmarks.db",
-	"dialect": "mysql"
-    },
-    "logging": {
-	"filePath": "/temp/file",
-	"requestPath": "/temp/request",
-	"logLevel": "debug"
-    },
-    "cookies": {
-	"domain": "example.com",
-	"path": "/",
-	"secure": true,
-	"prefix": "prefix"
-    },
-    "errorPath": "error",
-    "startUrl": "http://url",
-    "environment": "Development"
-}`
+const configYAML = `---
+security:
+  jwtIssuer: login.binggl.net
+  jwtSecret: secret
+  cookieName: login_token
+  loginRedirect: https://login.url.com
+  claim:
+    name: bookmarks
+    url: http://localhost:3000
+    roles:
+    - User
+    - Admin
+  cacheDuration: 10m
+
+database:
+  connectionString: "./bookmarks.db"
+  dialect: mysql
+
+logging:
+  filePath: "/temp/file"
+  requestPath: "/temp/request"
+  logLevel: debug
+
+cookies:
+  domain: example.com
+  path: "/"
+  secure: true
+  prefix: prefix
+
+errorPath: error
+startUrl: http://url
+environment: Development
+faviconUploadPath: "./faviconpath"
+defaultFavicon: "./favicon.ico"
+`
 
 // TestConfigReader reads config settings from json
 func TestConfigReader(t *testing.T) {
-	reader := strings.NewReader(configString)
+	reader := strings.NewReader(configYAML)
 	config, err := GetSettings(reader)
 	if err != nil {
 		t.Error("Could not read.", err)
@@ -66,6 +69,7 @@ func TestConfigReader(t *testing.T) {
 
 	assert.Equal(t, "http://url", config.StartURL)
 	assert.Equal(t, "Development", config.Environment)
-
 	assert.Equal(t, "error", config.ErrorPath)
+	assert.Equal(t, "./faviconpath", config.FaviconPath)
+	assert.Equal(t, "./favicon.ico", config.DefaultFavicon)
 }

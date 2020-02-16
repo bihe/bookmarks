@@ -89,8 +89,11 @@ func Create(basePath string, config config.AppConfig, version internal.VersionIn
 		BasePath:       basePath,
 	}
 	bookmarkAPI := &api.BookmarksAPI{
-		Handler:    baseHandler,
-		Repository: repository,
+		Handler:        baseHandler,
+		Repository:     repository,
+		BasePath:       basePath,
+		FaviconPath:    config.FaviconPath,
+		DefaultFavicon: config.DefaultFavicon,
 	}
 
 	// server combines setting and handlers to form the backend

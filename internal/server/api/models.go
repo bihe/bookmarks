@@ -181,6 +181,22 @@ func (b BookmarResultResponse) Render(w http.ResponseWriter, r *http.Request) er
 }
 
 // --------------------------------------------------------------------------
+// BookmarksPathsResponse
+// --------------------------------------------------------------------------
+
+// BookmarksPathsResponse returns available Paths
+// swagger:model
+type BookmarksPathsResponse struct {
+	Paths []string `json:"paths"`
+	Count int      `json:"count"`
+}
+
+// Render the specific response
+func (b BookmarksPathsResponse) Render(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+// --------------------------------------------------------------------------
 // ResultResponse
 // --------------------------------------------------------------------------
 

@@ -16,4 +16,5 @@ require (
 	github.com/wangii/emoji v0.0.0-20150519084846-d15b69a4831e
 	golang.org/x/sys v0.0.0-20200212091648-12a6c2dcc1e4 // indirect
 	golang.org/x/text v0.3.2 // indirect
+	gopkg.in/yaml.v2 v2.2.8
 )

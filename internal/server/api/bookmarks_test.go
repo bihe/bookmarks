@@ -79,6 +79,7 @@ func (r *MockRepository) GetBookmarkById(id, username string) (store.Bookmark, e
 		Type:        store.Node,
 		URL:         "http://url",
 		UserName:    username,
+		Favicon:     "favicon.ico",
 	}, nil
 }
 
@@ -461,10 +462,6 @@ func TestGetMostVisited(t *testing.T) {
 	assert.Equal(t, 0, bl.Count)
 	assert.Equal(t, true, bl.Success)
 }
-
-// --------------------------------------------------------------------------
-// CRUD tests
-// --------------------------------------------------------------------------
 
 func repository(t *testing.T) (store.Repository, *gorm.DB) {
 	var (
@@ -1180,4 +1177,210 @@ func TestUpdateSortOrder(t *testing.T) {
 	req.Header.Add("Content-Type", "application/json")
 	r.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
+func TestGetFavicon(t *testing.T) {
+	mockAPI := &BookmarksAPI{
+		Handler:        baseHandler,
+		Repository:     &MockRepository{fail: false},
+		BasePath:       "../../../",
+		FaviconPath:    "./assets",
+		DefaultFavicon: "./assets/favicon.ico",
+	}
+	getFavicon := mockAPI.Secure(mockAPI.GetFavicon)
+
+	r := chi.NewRouter()
+	r.Use(jwtUser)
+	r.Get("/", getFavicon)
+	r.Get("/{id}", getFavicon)
+
+	// get the favicon
+	// ---------------------------------------------------------------
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/id", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, len(rec.Body.Bytes()) > 0)
+
+	// no ID
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	// fail lookup
+	// ---------------------------------------------------------------
+	mockAPI = &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: &MockRepository{fail: true},
+	}
+	getFavicon = mockAPI.Secure(mockAPI.GetFavicon)
+	r = chi.NewRouter()
+	r.Use(jwtUser)
+	r.Get("/{id}", getFavicon)
+
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/id", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+
+	// wrong favicon
+	// ---------------------------------------------------------------
+	mockAPI = &BookmarksAPI{
+		Handler:        baseHandler,
+		Repository:     &MockRepository{fail: false},
+		BasePath:       "../../../",
+		FaviconPath:    "./_a/",
+		DefaultFavicon: "./assets/favicon.ico",
+	}
+	getFavicon = mockAPI.Secure(mockAPI.GetFavicon)
+	r = chi.NewRouter()
+	r.Use(jwtUser)
+	r.Get("/{id}", getFavicon)
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/id", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestFetchAndForward(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	bookmarkAPI := &BookmarksAPI{
+		Handler:        baseHandler,
+		Repository:     repo,
+		BasePath:       "../../../",
+		FaviconPath:    "./assets",
+		DefaultFavicon: "./assets/favicon.ico",
+	}
+	getFavicon := bookmarkAPI.Secure(bookmarkAPI.FetchAndForward)
+	create := bookmarkAPI.Secure(bookmarkAPI.Create)
+
+	r := chi.NewRouter()
+	r.Use(jwtUser)
+	r.Post("/", create)
+	r.Get("/", getFavicon)
+	r.Get("/{id}", getFavicon)
+
+	payload := `{
+		"displayName": "Node",
+		"path": "/",
+		"type": "Node",
+		"url": "http://url"
+	}`
+
+	// create one item
+	// ---------------------------------------------------------------
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/", strings.NewReader(payload))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	var result ResultResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Errorf("could not unmarshal body: %v", err)
+	}
+	id := result.Value
+
+	// fetch the URL
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/"+id, nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusFound, rec.Code)
+	assert.Equal(t, "http://url", rec.Header().Get("location"))
+
+	// no ID
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	// create a folder
+	// ---------------------------------------------------------------
+	payload = `{
+		"displayName": "Node",
+		"path": "/",
+		"type": "Folder"
+	}`
+
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/", strings.NewReader(payload))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Errorf("could not unmarshal body: %v", err)
+	}
+	id = result.Value
+
+	// error folder
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/"+id, nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	// error wrong ID
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/any", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
+func (r *MockRepository) GetAllPaths(username string) ([]string, error) {
+	if r.fail {
+		return nil, raisedError
+	}
+
+	return []string{"/", "/a", "/b"}, nil
+}
+
+func TestBookmarkAllPaths(t *testing.T) {
+	// arrange
+	bookmarkAPI := &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: &MockRepository{},
+	}
+	function := bookmarkAPI.Secure(bookmarkAPI.GetAllPaths)
+
+	r := chi.NewRouter()
+	r.Use(jwtUser)
+	r.Get("/", function)
+
+	// get the paths
+	// ---------------------------------------------------------------
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var result BookmarksPathsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Errorf("could not unmarshal body: %v", err)
+	}
+
+	assert.Equal(t, 3, result.Count)
+	assert.Equal(t, "/", result.Paths[0])
+
+	// fail
+	// ---------------------------------------------------------------
+	bookmarkAPI = &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: &MockRepository{fail: true},
+	}
+	function = bookmarkAPI.Secure(bookmarkAPI.GetAllPaths)
+
+	r = chi.NewRouter()
+	r.Use(jwtUser)
+	r.Get("/", function)
+
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/", nil)
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
 }

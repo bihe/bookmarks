@@ -39,6 +39,13 @@ func TestFetchFavicon(t *testing.T) {
 		}
 
 	})
+	mux.HandleFunc("/singleFile/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("content-lenght", fmt.Sprintf("%d", len(favicon)))
+		if _, err := w.Write(favicon); err != nil {
+			t.Fatalf("%v", err)
+		}
+
+	})
 	mux.HandleFunc("/img/favicon.png", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("content-lenght", fmt.Sprintf("%d", len(favicon)))
 		if _, err := w.Write(favicon); err != nil {
@@ -73,6 +80,19 @@ func TestFetchFavicon(t *testing.T) {
                 </head>
                 <body>html</body>
             </html>`
+		if _, err := w.Write([]byte(html)); err != nil {
+			t.Fatalf("%v", err)
+		}
+	})
+	mux.HandleFunc("/singleFile/index.html", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("content-type", "text/html")
+		html := ` <html>
+	        <head>
+	            <meta charset="utf-8">
+	            <link rel="icon" href="favicon.ico">
+	        </head>
+	        <body>html</body>
+	    </html>`
 		if _, err := w.Write([]byte(html)); err != nil {
 			t.Fatalf("%v", err)
 		}
@@ -139,6 +159,15 @@ func TestFetchFavicon(t *testing.T) {
 		t.Errorf("could not get favicon: %v", err)
 	}
 	assert.Equal(t, "favicon.png", fileName)
+	assert.Equal(t, len(favicon), len(payload))
+
+	// single file
+	// ------------------------------------------------------------------
+	fileName, payload, err = GetFaviconFromURL(ts.URL + "/singleFile/index.html")
+	if err != nil {
+		t.Errorf("could not get favicon: %v", err)
+	}
+	assert.Equal(t, "favicon.ico", fileName)
 	assert.Equal(t, len(favicon), len(payload))
 
 	// html parse error
