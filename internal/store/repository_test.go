@@ -828,5 +828,38 @@ func TestGetAllPath(t *testing.T) {
 	}
 
 	assert.Equal(t, 5, len(paths))
+}
 
+func TestGetFolderByPath(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	userName := "username"
+
+	if _, err := repo.Create(Bookmark{
+		DisplayName: "Z",
+		Path:        "/",
+		SortOrder:   0,
+		Type:        Folder,
+		UserName:    userName,
+	}); err != nil {
+		t.Errorf("Could not create bookmarks: %v", err)
+	}
+
+	folder, err := repo.GetFolderByPath("/Z", userName)
+	if err != nil {
+		t.Errorf("cannot get folder for path '%s': %v", "/Z", err)
+	}
+	assert.Equal(t, "/", folder.Path)
+	assert.Equal(t, "Z", folder.DisplayName)
+
+	_, err = repo.GetFolderByPath("/", userName)
+	if err == nil {
+		t.Errorf("expected error for path '/'")
+	}
+
+	_, err = repo.GetFolderByPath("", userName)
+	if err == nil {
+		t.Errorf("expected error for path ''")
+	}
 }

@@ -125,6 +125,11 @@ func (r *dbRepository) GetBookmarkById(id, username string) (Bookmark, error) {
 func (r *dbRepository) GetFolderByPath(path, username string) (Bookmark, error) {
 	var bookmark Bookmark
 
+	// ROOT path is virtual
+	if path == "/" {
+		return Bookmark{}, fmt.Errorf("cannot get folder for path '%s'", path)
+	}
+
 	parent, folderName, ok := pathAndFolder(path)
 	if !ok {
 		return Bookmark{}, fmt.Errorf("could not get parent/folder of path '%s'", path)

@@ -516,7 +516,14 @@ func (b *BookmarksAPI) Update(user security.User, w http.ResponseWriter, r *http
 		}
 		childCount := existing.ChildCount
 		if existing.Type == store.Folder {
-			// 2) get the folder child-count
+			// 2) ensure that the existing folder is not moved to itself
+			folderPath := ensureFolderPath(existing.Path, existing.DisplayName)
+			if payload.Path == folderPath {
+				handler.LogFunction("api.Update").Warnf("a folder cannot be moved into itself: folder-path: '%s', destination: '%s'", folderPath, payload.Path)
+				return errors.BadRequestError{Err: fmt.Errorf("cannot move folder into itself"), Request: r}
+			}
+
+			// 3) get the folder child-count
 			// on save of a folder, update the child-count
 			parentPath := existing.Path
 			path := ensureFolderPath(parentPath, existing.DisplayName)
@@ -538,7 +545,7 @@ func (b *BookmarksAPI) Update(user security.User, w http.ResponseWriter, r *http
 		existingDisplayName := existing.DisplayName
 		existingPath := existing.Path
 
-		// 3) update the bookmark
+		// 4) update the bookmark
 		item, err := repo.Update(store.Bookmark{
 			ID:          payload.ID,
 			Created:     existing.Created,
@@ -599,12 +606,30 @@ func (b *BookmarksAPI) Update(user security.User, w http.ResponseWriter, r *http
 			}
 		}
 
-		// TODO: if the path has changed - update the childcount of the changed parent path
+		// if the path has changed - update the childcount of affected paths
+		if existingPath != payload.Path {
+			// the affected paths are the origin-path and the destination-path
+			if err := updateChildCountOfPath(existingPath, user.Username, repo); err != nil {
+				handler.LogFunction("api.Update").Errorf("could not update child-count of path '%s': %v", existingPath, err)
+				return err
+			}
+			// and the destination-path
+			if err := updateChildCountOfPath(payload.Path, user.Username, repo); err != nil {
+				handler.LogFunction("api.Update").Errorf("could not update child-count of path '%s': %v", payload.Path, err)
+				return err
+			}
+		}
 
 		return nil
 	}); err != nil {
 		handler.LogFunction("api.Update").Errorf("could not update bookmark because of error: %v", err)
-		return errors.ServerError{Err: fmt.Errorf("error updating bookmark: %v", err), Request: r}
+
+		var badRequest errors.BadRequestError
+		if er.As(err, &badRequest) {
+			return badRequest
+		} else {
+			return errors.ServerError{Err: fmt.Errorf("error updating bookmark: %v", err), Request: r}
+		}
 	}
 
 	handler.LogFunction("api.Update").Infof("updated bookmark with ID '%s'", id)
@@ -616,6 +641,39 @@ func (b *BookmarksAPI) Update(user security.User, w http.ResponseWriter, r *http
 			Value:   id,
 		},
 	})
+}
+
+func updateChildCountOfPath(path, username string, repo store.Repository) error {
+	if path == "/" {
+		handler.LogFunction("api.updateChildCountOfPath").Debugf("skip the ROOT path '/'")
+		return nil
+	}
+
+	folder, err := repo.GetFolderByPath(path, username)
+	if err != nil {
+		handler.LogFunction("api.updateChildCountOfPath").Errorf("cannot get the folder for path '%s': %v", path, err)
+		return err
+	}
+
+	nodeCount, err := repo.GetPathChildCount(path, username)
+	if err != nil {
+		handler.LogFunction("api.updateChildCountOfPath").Errorf("could not get the child-count of the path '%s': %v", path, err)
+		return err
+	}
+
+	var childCount int
+	if len(nodeCount) > 0 {
+		// use the firest element, because the count was queried for a specific path
+		childCount = nodeCount[0].Count
+	}
+
+	folder.ChildCount = childCount
+
+	if _, err := repo.Update(folder); err != nil {
+		handler.LogFunction("api.updateChildCountOfPath").Errorf("could not update the child-count of folder '%s': %v", path, err)
+		return err
+	}
+	return nil
 }
 
 // swagger:operation Delete /api/v1/bookmarks/{id} bookmarks DeleteBookmark

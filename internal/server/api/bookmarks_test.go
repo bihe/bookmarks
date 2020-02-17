@@ -1382,5 +1382,141 @@ func TestBookmarkAllPaths(t *testing.T) {
 	req, _ = http.NewRequest("GET", "/", nil)
 	r.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}
 
+func TestMoveBookmarks(t *testing.T) {
+	repo, db := repository(t)
+	defer db.Close()
+
+	// arrange
+	bookmarkAPI := &BookmarksAPI{
+		Handler:    baseHandler,
+		Repository: repo,
+	}
+
+	create := bookmarkAPI.Secure(bookmarkAPI.Create)
+	update := bookmarkAPI.Secure(bookmarkAPI.Update)
+	getBookmark := bookmarkAPI.Secure(bookmarkAPI.GetBookmarkByID)
+	getFolder := bookmarkAPI.Secure(bookmarkAPI.GetBookmarksFolderByPath)
+
+	r := chi.NewRouter()
+	r.Use(jwtUser)
+	r.Post("/", create)
+	r.Put("/", update)
+	r.Get("/{id}", getBookmark)
+	r.Get("/folder", getFolder)
+
+	// create folder hierarchy
+	// /Folder
+	//     /Folder1
+	// ---------------------------------------------------------------
+	payload := `{
+		"displayName": "%s",
+		"path": "%s",
+		"type": "Folder"
+	}`
+
+	// /Folder
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/", strings.NewReader(fmt.Sprintf(payload, "Folder", "/")))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// /Folder/Folder1
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/", strings.NewReader(fmt.Sprintf(payload, "Folder1", "/Folder")))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// /Folder/Folder2
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("POST", "/", strings.NewReader(fmt.Sprintf(payload, "Folder2", "/Folder")))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// retrieve the /Folder
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/folder?path=/Folder", nil)
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var result BookmarResultResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Errorf("could not unmarshal body: %v", err)
+	}
+	assert.Equal(t, "/", result.Value.Path)
+	assert.Equal(t, "Folder", result.Value.DisplayName)
+	assert.Equal(t, 2, result.Value.ChildCount)
+
+	// retrieve the /Folder/Folder1
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/folder?path=/Folder/Folder1", nil)
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Errorf("could not unmarshal body: %v", err)
+	}
+	assert.Equal(t, "/Folder", result.Value.Path)
+	assert.Equal(t, "Folder1", result.Value.DisplayName)
+
+	// change the path of the folder
+	// ---------------------------------------------------------------
+	folder := result.Value
+	folder.Path = "/"
+	payloadBytes, err := json.Marshal(folder)
+	if err != nil {
+		t.Errorf("cannot marshall folder: %v", err)
+	}
+
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("PUT", "/", bytes.NewReader(payloadBytes))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var bm ResultResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &bm); err != nil {
+		t.Errorf("could not unmarshal body: %v", err)
+	}
+	assert.Equal(t, folder.ID, bm.Value)
+
+	// retrieve the /Folder again
+	// ---------------------------------------------------------------
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/folder?path=/Folder", nil)
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Errorf("could not unmarshal body: %v", err)
+	}
+	assert.Equal(t, "/", result.Value.Path)
+	assert.Equal(t, "Folder", result.Value.DisplayName)
+	assert.Equal(t, 1, result.Value.ChildCount)
+
+	// change the path of the folder to itself
+	// ---------------------------------------------------------------
+	folder = result.Value
+	folder.Path = "/Folder"
+	payloadBytes, err = json.Marshal(folder)
+	if err != nil {
+		t.Errorf("cannot marshall folder: %v", err)
+	}
+
+	rec = httptest.NewRecorder()
+	req, _ = http.NewRequest("PUT", "/", bytes.NewReader(payloadBytes))
+	req.Header.Add("Content-Type", "application/json")
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
