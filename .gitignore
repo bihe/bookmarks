@@ -16,3 +16,5 @@ _etc/application.json
 _etc/application.yaml
 
 uploads/
+
+bookmarks.api
