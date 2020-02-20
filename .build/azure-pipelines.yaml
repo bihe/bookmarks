@@ -54,7 +54,7 @@ steps:
   displayName: 'Run unit tests'
 
 - script: |
-    go build -v cmd/server/main.go
+    go build -v cmd/server/*.go
   workingDirectory: '$(modulePath)'
   continueOnError: false
   displayName: 'Build App: bookmakrs-go'
