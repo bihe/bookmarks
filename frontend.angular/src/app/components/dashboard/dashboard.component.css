@@ -1,0 +1,28 @@
+.dashboard {
+  padding: 10px;
+  display: block;
+  margin-bottom: 30px;
+}
+
+.dashboard_card {
+  max-width: 400px;
+  display: inline-block;
+  margin: 20px;
+}
+
+.dashboard_card_title {
+  color: black;
+}
+
+.dashboard_card_title:hover {
+  text-decoration: none;
+}
+
+.dashboard_card_footer {
+  font-weight: bold;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.8em;
+  padding: 5px;
+  text-align: right;
+  color: #999999;
+}

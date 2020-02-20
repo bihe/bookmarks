@@ -5,12 +5,16 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch",
+            "name": "Run :: go-chi",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}",
+            "program": "${workspaceFolder}/cmd/server/main.go",
             "args": [
+                "-c",
+                "../../_etc/application.yaml",
+                "-b",
+                "../.."
             ],
             "internalConsoleOptions": "openOnSessionStart",
             "showLog": true,

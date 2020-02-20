@@ -22,6 +22,23 @@ run:
 clean:
 	@-$(MAKE) go-clean
 
+swagger:
+	@-$(MAKE) -s go-swagger
+
+update:
+	@-$(MAKE) go-update
+
+coverage:
+	@-$(MAKE) -s go-test-coverage
+
+docker-build:
+	@-$(MAKE) -s __docker-build
+
+docker-run:
+	@-$(MAKE) -s __docker-run
+
+
+
 
 go-compile: go-clean go-build
 
@@ -37,14 +54,36 @@ go-test:
 
 go-build:
 	@echo "  >  Building binary..."
-	go build -o bookmarks.api ./*.go
+	go build -o bookmarks.api ./cmd/server/*.go
 
 go-build-release:
 	@echo "  >  Building binary..."
-	GOOS=linux go build -race -ldflags="-s -w -X main.Version=${VERSION}${COMMIT} -X main.Build=${BUILD}" -tags prod -o bookmarks.api ./*.go
+	GOOS=linux CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${VERSION}${COMMIT} -X main.Build=${BUILD}" -tags prod -o bookmarks.api ./cmd/server/*.go
+
+go-swagger:
+	# https://github.com/go-swagger/go-swagger
+	swagger generate spec -o assets/swagger/swagger.json -m -w ./internal/server/api
+
 go-clean:
 	@echo "  >  Cleaning build cache"
 	go clean ./...
 	rm -f ./bookmarks.api
+
+go-update:
+	@echo "  >  Go update dependencies ..."
+	go get -u ./...
+
+go-test-coverage:
+	@echo "  >  Go test coverage ..."
+	go test -race -coverprofile="coverage.txt" -covermode atomic ./...
+
+__docker-build:
+	@echo " ... building docker image"
+	docker build -t bookmarks .
+
+__docker-run:
+	@echo " ... running docker image"
+	docker run -it -p 127.0.0.1:3000:3000 -v "$(PWD)/_etc":/opt/bookmarks/etc -v "$(PWD)/uploads":/opt/bookmarks/uploads bookmarks
+
 
 .PHONY: compile release test run clean

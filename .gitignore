@@ -12,11 +12,7 @@
 *.out
 
 .env
-application.json
-bookmarks.api
-development.http
-.vscode/settings.json
-application.Debug.json
-_db/bookmarks.Debug.db
-bookmarks-go
-_logs/
+_etc/application.json
+_etc/application.yaml
+
+uploads/
