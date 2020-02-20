@@ -662,7 +662,12 @@
           "x-go-name": "SortOrder"
         },
         "type": {
-          "$ref": "#/definitions/NodeType"
+          "type": "string",
+          "enum": [
+            "Node",
+            "Folder"
+          ],
+          "x-go-name": "Type"
         },
         "url": {
           "type": "string",
@@ -720,15 +725,17 @@
       "description": "BookmarksPathsResponse returns available Paths",
       "type": "object",
       "properties": {
-        "Count": {
+        "count": {
           "type": "integer",
-          "format": "int64"
+          "format": "int64",
+          "x-go-name": "Count"
         },
-        "Paths": {
+        "paths": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "x-go-name": "Paths"
         }
       },
       "x-go-package": "github.com/bihe/bookmarks/internal/server/api"
@@ -767,10 +774,6 @@
         }
       },
       "x-go-package": "github.com/bihe/commons-go/handler"
-    },
-    "NodeType": {
-      "type": "string",
-      "x-go-package": "github.com/bihe/bookmarks/internal/server/api"
     },
     "ProblemDetail": {
       "description": "\"Note that both \"type\" and \"instance\" accept relative URIs; this means\nthat they must be resolved relative to the document's base URI\"",

@@ -4,19 +4,25 @@
 # https://docs.microsoft.com/azure/devops/pipelines/languages/go
 
 pool:
-  vmImage: 'Ubuntu 16.04'
+  vmImage: 'Ubuntu 18.04'
 
 variables:
-  GOPATH: '$(Agent.BuildDirectory)/gopath' # Go workspace path
-  GOROOT: '$(Agent.BuildDirectory)/go' # Go installation path
   GOBIN:  '$(GOPATH)/bin' # Go binaries path
+  GOROOT: '/usr/local/go1.13' # Go installation path
+  GOPATH: '$(system.defaultWorkingDirectory)/gopath' # Go workspace path
   modulePath: '$(GOPATH)/src/github.com/$(build.repository.name)' # Path to the module's code
+  GO111MODULE: 'on'
+  DOCKER_BUILDKIT: 1
+  TSTAMP: $[format('{0:yyyyMMdd}', pipeline.startTime)]
+  imageName: 'bihe/bookmarks-go'
 
 steps:
-- script: |
-    wget "https://storage.googleapis.com/golang/go1.12.3.linux-amd64.tar.gz" --output-document "$(Agent.BuildDirectory)/go1.12.3.tar.gz"
-    tar -C '$(Agent.BuildDirectory)' -xzf "$(Agent.BuildDirectory)/go1.12.3.tar.gz"
-  displayName: 'Install Go 1.12'
+
+# Go tool installer
+# Find in cache or download a specific version of Go and add it to the PATH
+- task: GoTool@0
+  inputs:
+    version: '1.13.8'
 
 - script: |
     mkdir -p '$(GOBIN)'
@@ -27,48 +33,60 @@ steps:
     echo '##vso[task.prependpath]$(GOBIN)'
     echo '##vso[task.prependpath]$(GOROOT)/bin'
   displayName: 'Set up the Go workspace'
+  continueOnError: false
 
 - script: |
     go version
     go get -v -t -d ./...
-    go get github.com/jstemmer/go-junit-report
-    go get github.com/axw/gocov/gocov
-    go get github.com/AlekSi/gocov-xml
-    go get github.com/matm/gocov-html
   workingDirectory: '$(modulePath)'
+  continueOnError: false
   displayName: 'Get dependencies'
 
 - script: |
-    go test -v -coverprofile=coverage.txt -covermode count 2>&1 ./... | go-junit-report > junit.xml
-    gocov convert coverage.txt > coverage.json
-    gocov-xml < coverage.json > coverage.xml
-    gocov-html < coverage.json > index.html
-    mkdir reports
-    cp junit.xml ./reports/junit.xml
-    cp coverage.xml ./reports/coverage.xml
-    cp index.html ./reports/index.html
-  continueOnError: true
+    go test -v -race -coverprofile=coverage.txt -covermode atomic 2>&1 ./...; ec=$?
+    echo "go test result is - $ec"
+    if [ $ec == 0 ]; then
+      echo "do codecov upload"
+      bash <(curl -s https://codecov.io/bash)
+    fi
+  continueOnError: false
   workingDirectory: '$(modulePath)'
   displayName: 'Run unit tests'
 
 - script: |
-    go build -v
+    go build -v cmd/server/main.go
   workingDirectory: '$(modulePath)'
-  continueOnError: true
-  displayName: 'Build App: bookmarks'
+  continueOnError: false
+  displayName: 'Build App: bookmakrs-go'
 
-- task: PublishTestResults@2
+- task: Docker@2
+  displayName: 'Login to Docker-Hub (hub.docker.com)'
   inputs:
-    testRunner: JUnit
-    testResultsFiles: '$(modulePath)/reports/junit.xml'
+    command: login
+    containerRegistry: dockerhub
 
-- task: PublishCodeCoverageResults@1
+- task: Docker@2
+  displayName: 'Build Docker image: bookmarks-go'
   inputs:
-    codeCoverageTool: 'cobertura'
-    summaryFileLocation: '$(modulePath)/reports/coverage.xml'
-    reportDirectory: '$(modulePath)/reports/'
+    command: build
+    Dockerfile: '$(modulePath)/Dockerfile'
+    repository: $(imageName)
+    tags: |
+      latest
+      $(buildtime_variable_commit)
+      $(Build.SourceBranchName)
+    arguments: |
+      --build-arg buildtime_variable_version=$(buildtime_variable_version)
+      --build-arg buildtime_variable_timestamp=$(TSTAMP)
+      --build-arg buildtime_variable_commit=$(buildtime_variable_commit)
 
-- task: PublishPipelineArtifact@0
+- task: Docker@2
+  displayName: 'Push to Docker-Hub (hub.docker.com)'
   inputs:
-    artifactName: 'Test Reports'
-    targetPath: '$(modulePath)/reports/'
+    containerRegistry: dockerhub
+    command: push
+    repository: $(imageName)
+    tags: |
+      latest
+      $(buildtime_variable_commit)
+      $(Build.SourceBranchName)

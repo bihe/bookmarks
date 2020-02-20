@@ -14,6 +14,8 @@ import (
 // Models
 // --------------------------------------------------------------------------
 
+// available node-types
+// swagger:enum NodeType
 type NodeType string
 
 const (
