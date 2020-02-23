@@ -37,6 +37,9 @@ docker-build:
 docker-run:
 	@-$(MAKE) -s __docker-run
 
+frontend:
+	@-$(MAKE) do-frontend-build
+
 
 
 
@@ -85,5 +88,8 @@ __docker-run:
 	@echo " ... running docker image"
 	docker run -it -p 127.0.0.1:3000:3000 -v "$(PWD)/_etc":/opt/bookmarks/etc -v "$(PWD)/uploads":/opt/bookmarks/uploads bookmarks
 
+do-frontend-build:
+	@echo "  >  Building angular frontend ..."
+	cd ./frontend.angular;	npm install && npm run build -- --prod --base-href /ui/
 
-.PHONY: compile release test run clean
+.PHONY: compile release test run clean coverage
