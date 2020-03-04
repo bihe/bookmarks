@@ -14,6 +14,7 @@ type AppConfig struct {
 	DB             Database           `yaml:"database"`
 	Log            LogConfig          `yaml:"logging"`
 	Cookies        ApplicationCookies `yaml:"cookies"`
+	Cors           CorsSettings       `yaml:"cors"`
 	ErrorPath      string             `yaml:"errorPath"`
 	StartURL       string             `yaml:"startUrl"`
 	Environment    string             `yaml:"environment"`
@@ -57,6 +58,15 @@ type ApplicationCookies struct {
 	Path   string `yaml:"path"`
 	Secure bool   `yaml:"secure"`
 	Prefix string `yaml:"prefix"`
+}
+
+// CorsSettings specifies the used settings
+type CorsSettings struct {
+	AllowedOrigins   []string `yaml:"origins"`
+	AllowedMethods   []string `yaml:"methods"`
+	AllowedHeaders   []string `yaml:"headers"`
+	AllowCredentials bool     `yaml:"credentials"`
+	MaxAge           int      `yaml:"maxAge"`
 }
 
 // GetSettings returns application configuration values

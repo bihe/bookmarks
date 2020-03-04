@@ -31,13 +31,12 @@ type Server struct {
 	basePath       string
 	jwtOpts        security.JwtOptions
 	cookieSettings cookies.Settings
-
-	logConfig   config.LogConfig
-	environment string
-
-	errorHandler *html.TemplateHandler
-	appInfoAPI   *handler.AppInfoHandler
-	bookmarkAPI  *api.BookmarksAPI
+	logConfig      config.LogConfig
+	cors           config.CorsSettings
+	environment    string
+	errorHandler   *html.TemplateHandler
+	appInfoAPI     *handler.AppInfoHandler
+	bookmarkAPI    *api.BookmarksAPI
 }
 
 // Create instantiates a new Server instance
@@ -118,6 +117,7 @@ func Create(basePath string, config config.AppConfig, version internal.VersionIn
 		jwtOpts:        jwtOptions,
 		cookieSettings: cookieSettings,
 		logConfig:      config.Log,
+		cors:           config.Cors,
 		environment:    env,
 		appInfoAPI:     appInfo,
 		errorHandler:   errHandler,

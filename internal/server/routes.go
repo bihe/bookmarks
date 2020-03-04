@@ -9,6 +9,7 @@ import (
 	"github.com/bihe/commons-go/security"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/rs/cors"
 )
 
 // routes performs setup of middlewares and API handlers
@@ -22,6 +23,16 @@ func (s *Server) routes() {
 	r.Use(middleware.DefaultCompress)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
+
+	// setup cors for single frontend
+	cors := cors.New(cors.Options{
+		AllowedOrigins:   s.cors.AllowedOrigins,
+		AllowedMethods:   s.cors.AllowedMethods,
+		AllowedHeaders:   s.cors.AllowedHeaders,
+		AllowCredentials: s.cors.AllowCredentials,
+		MaxAge:           s.cors.MaxAge,
+	})
+	r.Use(cors.Handler)
 
 	s.setupRequestLogging()
 

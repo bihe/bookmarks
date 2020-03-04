@@ -27,6 +27,18 @@ cookies:
   secure: true
   prefix: prefix
 
+cors:
+  origins:
+  - "*"
+  methods:
+  - "GET"
+  - "POST"
+  headers:
+  - "Accept"
+  - "Authorization"
+  credentials: true
+  maxAge: 500
+
 errorPath: error
 startUrl: http://url
 environment: Development

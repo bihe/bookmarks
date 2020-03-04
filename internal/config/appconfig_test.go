@@ -36,6 +36,18 @@ cookies:
   secure: true
   prefix: prefix
 
+cors:
+  origins:
+  - "*"
+  methods:
+  - "GET"
+  - "POST"
+  headers:
+  - "Accept"
+  - "Authorization"
+  credentials: true
+  maxAge: 500
+
 errorPath: error
 startUrl: http://url
 environment: Development
@@ -72,4 +84,10 @@ func TestConfigReader(t *testing.T) {
 	assert.Equal(t, "error", config.ErrorPath)
 	assert.Equal(t, "./faviconpath", config.FaviconPath)
 	assert.Equal(t, "./favicon.ico", config.DefaultFavicon)
+
+	assert.Equal(t, 500, config.Cors.MaxAge)
+	assert.Equal(t, true, config.Cors.AllowCredentials)
+	assert.Equal(t, []string{"Accept", "Authorization"}, config.Cors.AllowedHeaders)
+	assert.Equal(t, []string{"GET", "POST"}, config.Cors.AllowedMethods)
+	assert.Equal(t, []string{"*"}, config.Cors.AllowedOrigins)
 }
