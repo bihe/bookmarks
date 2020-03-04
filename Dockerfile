@@ -12,15 +12,15 @@ FROM golang:alpine AS BACKEND-BUILD
 
 ARG buildtime_variable_version=1.0.0
 ARG buildtime_variable_timestamp=20200217
-ARG buildtime_varialbe_commit=b75038e5e9924b67db7bbf3b1147a8e3512b2acb
+ARG buildtime_variable_commit=b75038e5e9924b67db7bbf3b1147a8e3512b2acb
 
 ENV VERSION=${buildtime_variable_version}
 ENV BUILD=${buildtime_variable_timestamp}
-ENV COMMIT=${buildtime_varialbe_commit}
+ENV COMMIT=${buildtime_variable_commit}
 
 WORKDIR /backend-build
 COPY . .
-RUN GOOS=linux CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${VERSION}${COMMIT} -X main.Build=${BUILD}" -tags prod -o bookmarks.api ./cmd/server/*.go
+RUN GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${VERSION}-${COMMIT} -X main.Build=${BUILD}" -tags prod -o bookmarks.api ./cmd/server/*.go
 ## --------------------------------------------------------------------------
 
 ## runtime

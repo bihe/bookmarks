@@ -22,7 +22,7 @@ steps:
 # Find in cache or download a specific version of Go and add it to the PATH
 - task: GoTool@0
   inputs:
-    version: '1.13.8'
+    version: '1.14'
 
 - script: |
     mkdir -p '$(GOBIN)'
