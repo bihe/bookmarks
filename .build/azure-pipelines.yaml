@@ -26,9 +26,7 @@ steps:
 
 - bash: |
     echo "##vso[task.setvariable variable=githash]${buildtime_variable_commit:0:6}"
-
-- bash: |
-    echo "using Git Hash $githash"
+    echo "using Git Hash $(githash)"
 
 - script: |
     mkdir -p '$(GOBIN)'
