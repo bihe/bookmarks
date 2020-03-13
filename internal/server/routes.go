@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/bihe/commons-go/handler"
-	"github.com/bihe/commons-go/security"
+	"golang.binggl.net/commons/handler"
+	"golang.binggl.net/commons/security"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/rs/cors"
@@ -64,13 +64,10 @@ func (s *Server) routes() {
 			r.Get("/fetch/{id}", s.bookmarkAPI.Secure(s.bookmarkAPI.FetchAndForward))
 			r.Get("/favicon/{id}", s.bookmarkAPI.Secure(s.bookmarkAPI.GetFavicon))
 		})
-		// the SPA
-		handler.ServeStaticDir(r, "/ui", http.Dir(filepath.Join(s.basePath, "./assets/ui")))
 
 		// swagger
 		handler.ServeStaticDir(r, "/swagger", http.Dir(filepath.Join(s.basePath, "./assets/swagger")))
 	})
 
-	r.Get("/", http.RedirectHandler("/ui", http.StatusMovedPermanently).ServeHTTP)
 	s.router = r
 }

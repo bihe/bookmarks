@@ -34,9 +34,9 @@ import (
 
 	"github.com/bihe/bookmarks/internal/favicon"
 	"github.com/bihe/bookmarks/internal/store"
-	"github.com/bihe/commons-go/errors"
-	"github.com/bihe/commons-go/handler"
-	"github.com/bihe/commons-go/security"
+	"golang.binggl.net/commons/errors"
+	"golang.binggl.net/commons/handler"
+	"golang.binggl.net/commons/security"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 )

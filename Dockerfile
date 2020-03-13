@@ -1,11 +1,3 @@
-## fronted build-phase
-## --------------------------------------------------------------------------
-FROM node:lts-alpine AS FRONTEND-BUILD
-WORKDIR /frontend-build
-COPY ./frontend.angular .
-RUN yarn global add @angular/cli@latest && yarn install && yarn run build --prod --base-href /ui/
-## --------------------------------------------------------------------------
-
 ## backend build-phase
 ## --------------------------------------------------------------------------
 FROM golang:alpine AS BACKEND-BUILD
@@ -34,9 +26,6 @@ COPY --from=BACKEND-BUILD /backend-build/assets /opt/bookmarks/assets
 COPY --from=BACKEND-BUILD /backend-build/templates /opt/bookmarks/templates
 ## the executable
 COPY --from=BACKEND-BUILD /backend-build/bookmarks.api /opt/bookmarks
-## the SPA frontend
-COPY --from=FRONTEND-BUILD /frontend-build/dist/bookmarks-ui /opt/bookmarks/assets/ui
-
 EXPOSE 3000
 
 # Do not run as root user

@@ -49,7 +49,6 @@ cors:
   maxAge: 500
 
 errorPath: error
-startUrl: http://url
 environment: Development
 faviconUploadPath: "./faviconpath"
 defaultFavicon: "./favicon.ico"
@@ -79,7 +78,6 @@ func TestConfigReader(t *testing.T) {
 	assert.Equal(t, "prefix", config.Cookies.Prefix)
 	assert.Equal(t, true, config.Cookies.Secure)
 
-	assert.Equal(t, "http://url", config.StartURL)
 	assert.Equal(t, "Development", config.Environment)
 	assert.Equal(t, "error", config.ErrorPath)
 	assert.Equal(t, "./faviconpath", config.FaviconPath)

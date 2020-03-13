@@ -16,7 +16,6 @@ type AppConfig struct {
 	Cookies        ApplicationCookies `yaml:"cookies"`
 	Cors           CorsSettings       `yaml:"cors"`
 	ErrorPath      string             `yaml:"errorPath"`
-	StartURL       string             `yaml:"startUrl"`
 	Environment    string             `yaml:"environment"`
 	FaviconPath    string             `yaml:"faviconUploadPath"`
 	DefaultFavicon string             `yaml:"defaultFavicon"`

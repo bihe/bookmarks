@@ -8,16 +8,15 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bihe/commons-go/cookies"
-	"github.com/bihe/commons-go/errors"
-	"github.com/bihe/commons-go/handler"
-	"github.com/bihe/commons-go/security"
 	"github.com/jinzhu/gorm"
+	"golang.binggl.net/commons/cookies"
+	"golang.binggl.net/commons/errors"
+	"golang.binggl.net/commons/handler"
+	"golang.binggl.net/commons/security"
 
 	"github.com/bihe/bookmarks/internal"
 	"github.com/bihe/bookmarks/internal/config"
 	"github.com/bihe/bookmarks/internal/server/api"
-	"github.com/bihe/bookmarks/internal/server/html"
 	"github.com/bihe/bookmarks/internal/store"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -34,7 +33,7 @@ type Server struct {
 	logConfig      config.LogConfig
 	cors           config.CorsSettings
 	environment    string
-	errorHandler   *html.TemplateHandler
+	errorHandler   *handler.TemplateHandler
 	appInfoAPI     *handler.AppInfoHandler
 	bookmarkAPI    *api.BookmarksAPI
 }
@@ -80,12 +79,15 @@ func Create(basePath string, config config.AppConfig, version internal.VersionIn
 		Version: version.Version,
 		Build:   version.Build,
 	}
-	errHandler := &html.TemplateHandler{
+
+	templatePath := filepath.Join(basePath, "templates")
+	errHandler := &handler.TemplateHandler{
 		Handler:        baseHandler,
 		Version:        version.Version,
 		Build:          version.Build,
 		CookieSettings: cookieSettings,
-		BasePath:       basePath,
+		AppName:        "bookmarks.binggl.net",
+		TemplateDir:    templatePath,
 	}
 	bookmarkAPI := &api.BookmarksAPI{
 		Handler:        baseHandler,
